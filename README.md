@@ -48,7 +48,8 @@ type Server struct {
 }
 ```
 
-Broadcast server
+A Server is the main class of this package, pass it to http.Handle on a chosen
+path to start a broadcast server.
 
 #### func (*Server) ServeHTTP
 

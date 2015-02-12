@@ -6,7 +6,8 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// Broadcast server
+// A Server is the main class of this package, pass it to http.Handle on a
+// chosen path to start a broadcast server.
 type Server struct {
 	// Invoked upon initial connection, can be used to enforce access control.
 	CanConnect func(r *http.Request) bool

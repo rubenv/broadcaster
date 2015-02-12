@@ -93,7 +93,7 @@ func TestMain(m *testing.M) {
 		}
 	}
 
-	var code int = 0
+	var code int
 
 	// Shut down redis when done
 	defer func() {
@@ -152,7 +152,7 @@ func startServer(s *Server) error {
 func stopServer() {
 	listener := httpListener
 	httpListener = nil
-	httpPort += 1
+	httpPort++
 
 	go func() {
 		listener.Stop()
