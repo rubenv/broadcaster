@@ -23,6 +23,26 @@ import "github.com/rubenv/broadcaster"
 
 ## Usage
 
+#### type Server
+
+```go
+type Server struct {
+	CanConnect func(r *http.Request) bool
+
+	// Can be used to configure buffer sizes etc.
+	//
+	// See http://godoc.org/github.com/gorilla/websocket#Upgrader
+	Upgrader websocket.Upgrader
+}
+```
+
+
+#### func (*Server) ServeHTTP
+
+```go
+func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request)
+```
+
 ## License
 
     (The MIT License)

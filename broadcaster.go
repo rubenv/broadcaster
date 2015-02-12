@@ -7,17 +7,17 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-var upgrader = websocket.Upgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
-}
-
 type Server struct {
 	CanConnect func(r *http.Request) bool
+
+	// Can be used to configure buffer sizes etc.
+	//
+	// See http://godoc.org/github.com/gorilla/websocket#Upgrader
+	Upgrader websocket.Upgrader
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	_, err := upgrader.Upgrade(w, r, nil)
+	_, err := s.Upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Println(err)
 		return
