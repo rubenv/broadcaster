@@ -23,6 +23,14 @@ import "github.com/rubenv/broadcaster"
 
 ## Usage
 
+#### type Connection
+
+```go
+type Connection struct {
+}
+```
+
+
 #### type Server
 
 ```go
@@ -30,8 +38,11 @@ type Server struct {
 	// Invoked upon initial connection, can be used to enforce access control.
 	CanConnect func(r *http.Request) bool
 
+	// Invoked upon channel subscription, can be used to enforce access control
+	// for channels.
+	CanSubscribe func(c *Connection, channel string) bool
+
 	// Can be used to configure buffer sizes etc.
-	//
 	// See http://godoc.org/github.com/gorilla/websocket#Upgrader
 	Upgrader websocket.Upgrader
 }
@@ -44,6 +55,7 @@ Broadcast server
 ```go
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request)
 ```
+Main HTTP server.
 
 #### func (*Server) Stats
 
