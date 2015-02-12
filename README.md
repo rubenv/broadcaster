@@ -68,7 +68,8 @@ Retrieve server stats
 
 ```go
 type Stats struct {
-	// Number of active websocket connections (note: does not include long-polling connections)
+	// Number of active websocket connections (note: does not include
+	// long-polling connections)
 	Connections int
 }
 ```

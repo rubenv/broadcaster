@@ -29,7 +29,8 @@ type Connection struct {
 
 // Server statistics
 type Stats struct {
-	// Number of active websocket connections (note: does not include long-polling connections)
+	// Number of active websocket connections (note: does not include
+	// long-polling connections)
 	Connections int
 }
 
@@ -63,6 +64,7 @@ func (s *Server) handleWebsocket(w http.ResponseWriter, r *http.Request) {
 // Retrieve server stats
 func (s *Server) Stats() Stats {
 	return Stats{
+		// TODO: Count in Redis
 		Connections: len(s.connections),
 	}
 }
