@@ -3,6 +3,7 @@ package broadcaster
 import (
 	"errors"
 	"fmt"
+	"log"
 	"math/rand"
 	"net"
 	"net/http"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	"github.com/garyburd/redigo/redis"
+	"github.com/gorilla/websocket"
 	"github.com/hydrogen18/stoppableListener"
 )
 
@@ -23,8 +25,30 @@ var httpListener *stoppableListener.StoppableListener
 var httpWg sync.WaitGroup
 
 func TestConnect(t *testing.T) {
-	t.Log("Inside test")
-	startServer(nil)
+	err := startServer(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = newClient()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	stopServer()
+}
+
+func TestConnect2(t *testing.T) {
+	err := startServer(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = newClient()
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	stopServer()
 }
 
@@ -92,19 +116,40 @@ func startServer(s *Server) error {
 		s = &Server{}
 	}
 
-	http.Handle("/broadcaster/", s)
-	server := http.Server{}
+	mux := http.NewServeMux()
+
+	mux.Handle("/broadcaster/", s)
+	server := http.Server{Handler: mux}
 
 	go func() {
 		httpWg.Add(1)
 		defer httpWg.Done()
-		server.Serve(httpListener)
+		err := server.Serve(httpListener)
+		log.Print(err)
 	}()
 
 	return nil
 }
 
 func stopServer() {
-	httpListener.Stop()
-	httpWg.Wait()
+	listener := httpListener
+	httpListener = nil
+	httpPort += 1
+
+	go func() {
+		listener.Stop()
+		httpWg.Wait()
+	}()
+}
+
+func newClient() (*websocket.Conn, error) {
+	url := fmt.Sprintf("ws://localhost:%d/broadcaster/", httpPort)
+	log.Println(url)
+
+	conn, _, err := websocket.DefaultDialer.Dial(url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return conn, nil
 }
