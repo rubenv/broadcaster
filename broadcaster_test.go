@@ -21,6 +21,7 @@ import (
 
 var redisPort int
 var httpPort int
+var httpServer *Server
 var httpListener *stoppableListener.StoppableListener
 var httpWg sync.WaitGroup
 
@@ -35,18 +36,33 @@ func TestConnect(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	stats := httpServer.Stats()
+	if stats.Connections != 1 {
+		t.Errorf("Unexpected connection count: %d", stats.Connections)
+	}
+
 	stopServer()
 }
 
-func TestConnect2(t *testing.T) {
-	err := startServer(nil)
+func TestCanConnect(t *testing.T) {
+	err := startServer(&Server{
+		CanConnect: func(r *http.Request) bool {
+			return false
+		},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	_, err = newClient()
-	if err != nil {
-		t.Fatal(err)
+	cerr := err.(clientError)
+	if err == nil || cerr.Response.StatusCode != 401 {
+		t.Fatal("Did properly deny access")
+	}
+
+	stats := httpServer.Stats()
+	if stats.Connections != 0 {
+		t.Errorf("Unexpected connection count: %d", stats.Connections)
 	}
 
 	stopServer()
@@ -116,6 +132,8 @@ func startServer(s *Server) error {
 		s = &Server{}
 	}
 
+	httpServer = s
+
 	mux := http.NewServeMux()
 
 	mux.Handle("/broadcaster/", s)
@@ -142,13 +160,24 @@ func stopServer() {
 	}()
 }
 
+type clientError struct {
+	Response   *http.Response
+	ProtoError error
+}
+
+func (e clientError) Error() string {
+	return e.ProtoError.Error()
+}
+
 func newClient() (*websocket.Conn, error) {
 	url := fmt.Sprintf("ws://localhost:%d/broadcaster/", httpPort)
-	log.Println(url)
 
-	conn, _, err := websocket.DefaultDialer.Dial(url, nil)
+	conn, resp, err := websocket.DefaultDialer.Dial(url, nil)
 	if err != nil {
-		return nil, err
+		return nil, clientError{
+			Response:   resp,
+			ProtoError: err,
+		}
 	}
 
 	return conn, nil

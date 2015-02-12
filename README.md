@@ -27,6 +27,7 @@ import "github.com/rubenv/broadcaster"
 
 ```go
 type Server struct {
+	// Invoked upon initial connection, can be used to enforce access control.
 	CanConnect func(r *http.Request) bool
 
 	// Can be used to configure buffer sizes etc.
@@ -36,12 +37,31 @@ type Server struct {
 }
 ```
 
+Broadcast server
 
 #### func (*Server) ServeHTTP
 
 ```go
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request)
 ```
+
+#### func (*Server) Stats
+
+```go
+func (s *Server) Stats() Stats
+```
+Retrieve server stats
+
+#### type Stats
+
+```go
+type Stats struct {
+	// Number of active websocket connections (note: does not include long-polling connections)
+	Connections int
+}
+```
+
+Server statistics
 
 ## License
 
