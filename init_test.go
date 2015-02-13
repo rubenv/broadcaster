@@ -135,6 +135,8 @@ func (s *testServer) Start() error {
 		s.Broadcaster = &Server{}
 	}
 
+	s.Broadcaster.RedisHost = fmt.Sprintf("localhost:%d", s.Port)
+
 	err = s.Broadcaster.Prepare()
 	if err != nil {
 		return err

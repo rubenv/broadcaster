@@ -20,6 +20,12 @@ type Server struct {
 	// See http://godoc.org/github.com/gorilla/websocket#Upgrader
 	Upgrader websocket.Upgrader
 
+	// Redis host, used for data, defaults to localhost:6379
+	RedisHost string
+
+	// PubSub host, used for pubsub, defaults to RedisHost
+	PubSubHost string
+
 	hub      hub
 	prepared bool
 }
@@ -27,7 +33,11 @@ type Server struct {
 type clientMessage map[string]string
 
 func (s *Server) Prepare() error {
-	s.hub.Server = s
+	err := s.hub.Prepare(s.RedisHost, s.PubSubHost)
+	if err != nil {
+		return err
+	}
+
 	go s.hub.Run()
 	s.prepared = true
 	return nil
