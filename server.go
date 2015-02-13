@@ -22,6 +22,8 @@ type Server struct {
 
 	// Local (websocket) connections
 	connections []*Connection
+
+	hub hub
 }
 
 type Connection struct {
@@ -43,6 +45,11 @@ type Stats struct {
 
 // Main HTTP server.
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// Start hub if it's not already running
+	if !s.hub.Running {
+		s.hub.Start()
+	}
+
 	if s.CanConnect != nil && !s.CanConnect(r) {
 		http.Error(w, "Unauthorized", 401)
 		return
@@ -50,9 +57,9 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method == "GET" {
 		s.handleWebsocket(w, r)
+	} else if r.Method == "POST" {
+		s.handleLongPoll(w, r)
 	}
-
-	// TODO: Long-polling support
 }
 
 func (s *Server) handleWebsocket(w http.ResponseWriter, r *http.Request) {
@@ -66,6 +73,9 @@ func (s *Server) handleWebsocket(w http.ResponseWriter, r *http.Request) {
 	s.connections = append(s.connections, &Connection{
 		socket: conn,
 	})
+}
+
+func (s *Server) handleLongPoll(w http.ResponseWriter, r *http.Request) {
 }
 
 // Retrieve server stats
