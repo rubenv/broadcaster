@@ -1,9 +1,6 @@
 package broadcaster
 
-import (
-	"net/http"
-	"testing"
-)
+import "testing"
 
 func TestConnect(t *testing.T) {
 	server, err := startServer(nil, 0)
@@ -12,12 +9,20 @@ func TestConnect(t *testing.T) {
 	}
 	defer server.Stop()
 
-	_, err = newClient(server)
+	client, err := newWSClient(server)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	stats := server.Broadcaster.Stats()
+	err = client.Authenticate(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	stats, err := server.Broadcaster.Stats()
+	if err != nil {
+		t.Fatal(err)
+	}
 	if stats.Connections != 1 {
 		t.Errorf("Unexpected connection count: %d", stats.Connections)
 	}
@@ -25,7 +30,7 @@ func TestConnect(t *testing.T) {
 
 func TestCanConnect(t *testing.T) {
 	server, err := startServer(&Server{
-		CanConnect: func(r *http.Request) bool {
+		CanConnect: func(data map[string]string) bool {
 			return false
 		},
 	}, 0)
@@ -34,13 +39,23 @@ func TestCanConnect(t *testing.T) {
 	}
 	defer server.Stop()
 
-	_, err = newClient(server)
-	cerr := err.(clientError)
-	if err == nil || cerr.Response.StatusCode != 401 {
-		t.Fatal("Did properly deny access")
+	client, err := newWSClient(server)
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	stats := server.Broadcaster.Stats()
+	err = client.Authenticate(nil)
+	if err == nil {
+		t.Fatal("Expected error!")
+	}
+	if err.Error() != "websocket: close 401 Unauthorized" {
+		t.Fatal("Did not properly deny access")
+	}
+
+	stats, err := server.Broadcaster.Stats()
+	if err != nil {
+		t.Fatal(err)
+	}
 	if stats.Connections != 0 {
 		t.Errorf("Unexpected connection count: %d", stats.Connections)
 	}

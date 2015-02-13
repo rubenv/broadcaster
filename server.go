@@ -10,48 +10,38 @@ import (
 // chosen path to start a broadcast server.
 type Server struct {
 	// Invoked upon initial connection, can be used to enforce access control.
-	CanConnect func(r *http.Request) bool
+	CanConnect func(data map[string]string) bool
 
 	// Invoked upon channel subscription, can be used to enforce access control
 	// for channels.
-	CanSubscribe func(c *Connection, channel string) bool
+	CanSubscribe func(data map[string]string, channel string) bool
 
 	// Can be used to configure buffer sizes etc.
 	// See http://godoc.org/github.com/gorilla/websocket#Upgrader
 	Upgrader websocket.Upgrader
 
-	// Local (websocket) connections
-	connections []*Connection
-
-	hub hub
-}
-
-type Connection struct {
-	authenticated bool
-	socket        *websocket.Conn
+	hub      hub
+	prepared bool
 }
 
 type clientMessage struct {
-	Id   string            `json:"id"`
-	Data map[string]string `json:"data"`
+	Id      string            `json:"id,omitempty"`
+	Type    string            `json:"type"`
+	Channel string            `json:"channel,omitempty"`
+	Data    map[string]string `json:"data,omitempty"`
 }
 
-// Server statistics
-type Stats struct {
-	// Number of active websocket connections (note: does not include
-	// long-polling connections)
-	Connections int
+func (s *Server) Prepare() error {
+	s.hub.Server = s
+	go s.hub.Run()
+	s.prepared = true
+	return nil
 }
 
 // Main HTTP server.
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// Start hub if it's not already running
-	if !s.hub.Running {
-		s.hub.Start()
-	}
-
-	if s.CanConnect != nil && !s.CanConnect(r) {
-		http.Error(w, "Unauthorized", 401)
+	if !s.prepared {
+		http.Error(w, "Prepare() not called on broadcaster.Server", 500)
 		return
 	}
 
@@ -63,25 +53,13 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleWebsocket(w http.ResponseWriter, r *http.Request) {
-	conn, err := s.Upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		http.Error(w, err.Error(), 400)
-		return
-	}
-
-	// TODO: Make thread-safe
-	s.connections = append(s.connections, &Connection{
-		socket: conn,
-	})
+	// Always a new client, easy!
+	newWebsocketClient(w, r, s)
 }
 
 func (s *Server) handleLongPoll(w http.ResponseWriter, r *http.Request) {
 }
 
-// Retrieve server stats
-func (s *Server) Stats() Stats {
-	return Stats{
-		// TODO: Count in Redis
-		Connections: len(s.connections),
-	}
+func (s *Server) Stats() (Stats, error) {
+	return s.hub.Stats()
 }

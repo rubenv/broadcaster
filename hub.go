@@ -1,21 +1,40 @@
 package broadcaster
 
-import "sync"
+import "github.com/garyburd/redigo/redis"
 
 type hub struct {
 	Running bool
+	Server  *Server
 
-	startlock sync.Mutex
+	NewClient chan client
+
+	Redis redis.Conn
+
+	ClientCount int
 }
 
-func (h *hub) Start() {
-	h.startlock.Lock()
-	if !h.Running {
-		h.Running = true
-		go h.run()
+// Server statistics
+type Stats struct {
+	// Number of active connections
+	Connections int
+}
+
+func (h *hub) Run() {
+	h.NewClient = make(chan client, 10)
+
+	//exit := false
+
+	for {
+		select {
+		case _ = <-h.NewClient:
+			h.ClientCount++
+		}
 	}
-	h.startlock.Unlock()
 }
 
-func (h *hub) run() {
+func (h *hub) Stats() (Stats, error) {
+	return Stats{
+		// TODO: Count in Redis
+		Connections: h.ClientCount,
+	}, nil
 }

@@ -23,24 +23,16 @@ import "github.com/rubenv/broadcaster"
 
 ## Usage
 
-#### type Connection
-
-```go
-type Connection struct {
-}
-```
-
-
 #### type Server
 
 ```go
 type Server struct {
 	// Invoked upon initial connection, can be used to enforce access control.
-	CanConnect func(r *http.Request) bool
+	CanConnect func(data map[string]string) bool
 
 	// Invoked upon channel subscription, can be used to enforce access control
 	// for channels.
-	CanSubscribe func(c *Connection, channel string) bool
+	CanSubscribe func(data map[string]string, channel string) bool
 
 	// Can be used to configure buffer sizes etc.
 	// See http://godoc.org/github.com/gorilla/websocket#Upgrader
@@ -50,6 +42,12 @@ type Server struct {
 
 A Server is the main class of this package, pass it to http.Handle on a chosen
 path to start a broadcast server.
+
+#### func (*Server) Prepare
+
+```go
+func (s *Server) Prepare() error
+```
 
 #### func (*Server) ServeHTTP
 
@@ -61,16 +59,14 @@ Main HTTP server.
 #### func (*Server) Stats
 
 ```go
-func (s *Server) Stats() Stats
+func (s *Server) Stats() (Stats, error)
 ```
-Retrieve server stats
 
 #### type Stats
 
 ```go
 type Stats struct {
-	// Number of active websocket connections (note: does not include
-	// long-polling connections)
+	// Number of active connections
 	Connections int
 }
 ```

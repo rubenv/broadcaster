@@ -135,6 +135,11 @@ func (s *testServer) Start() error {
 		s.Broadcaster = &Server{}
 	}
 
+	err = s.Broadcaster.Prepare()
+	if err != nil {
+		return err
+	}
+
 	mux := http.NewServeMux()
 
 	mux.Handle("/broadcaster/", s.Broadcaster)
@@ -157,6 +162,11 @@ func (s *testServer) Stop() {
 	}()
 }
 
+func sendMessage(channel, message string) error {
+	_, err := redisClient.Do("PUBLISH", channel, message)
+	return err
+}
+
 type clientError struct {
 	Response   *http.Response
 	ProtoError error
@@ -166,21 +176,47 @@ func (e clientError) Error() string {
 	return e.ProtoError.Error()
 }
 
-func newClient(s *testServer) (*websocket.Conn, error) {
-	url := fmt.Sprintf("ws://localhost:%d/broadcaster/", s.Port)
-
-	conn, resp, err := websocket.DefaultDialer.Dial(url, nil)
-	if err != nil {
-		return nil, clientError{
-			Response:   resp,
-			ProtoError: err,
-		}
-	}
-
-	return conn, nil
+type testWSClient struct {
+	Conn *websocket.Conn
 }
 
-func sendMessage(channel, message string) error {
-	_, err := redisClient.Do("PUBLISH", channel, message)
-	return err
+func newWSClient(s *testServer) (*testWSClient, error) {
+	url := fmt.Sprintf("ws://localhost:%d/broadcaster/", s.Port)
+
+	conn, _, err := websocket.DefaultDialer.Dial(url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return &testWSClient{Conn: conn}, nil
+}
+
+func (c *testWSClient) Authenticate(data map[string]string) error {
+	err := c.Send("auth", data)
+	if err != nil {
+		return err
+	}
+
+	m, err := c.Receive()
+	if err != nil {
+		return err
+	}
+
+	if m.Type != "authOk" {
+		return fmt.Errorf("Expected authOk, got %s instead", m.Type)
+	}
+	return nil
+}
+
+func (c *testWSClient) Send(msg string, data map[string]string) error {
+	return c.Conn.WriteJSON(clientMessage{
+		Type: msg,
+		Data: data,
+	})
+}
+
+func (c *testWSClient) Receive() (*clientMessage, error) {
+	m := &clientMessage{}
+	err := c.Conn.ReadJSON(m)
+	return m, err
 }
