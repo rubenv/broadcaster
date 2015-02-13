@@ -124,4 +124,7 @@ func TestWSSubscribe(t *testing.T) {
 	if stats.Connections != 1 {
 		t.Errorf("Unexpected connection count: %d", stats.Connections)
 	}
+	if stats.localSubscriptions["test"] != 1 {
+		t.Errorf("Unexpected subscription count: %d", stats.localSubscriptions["test"])
+	}
 }

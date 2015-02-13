@@ -6,10 +6,12 @@ type hub struct {
 	Running bool
 	Server  *Server
 
+	// Channels
 	NewClient        chan client
 	ClientDisconnect chan client
+	Subscribe        chan subscription
 
-	Subscribe chan client
+	Subscriptions map[string]map[client]bool
 
 	Redis redis.Conn
 
@@ -25,12 +27,18 @@ type subscription struct {
 type Stats struct {
 	// Number of active connections
 	Connections int
+
+	// For debugging purposes only
+	localSubscriptions map[string]int
 }
 
 func (h *hub) Run() {
+	// Prepare channels
 	h.NewClient = make(chan client, 10)
 	h.ClientDisconnect = make(chan client, 10)
-	h.Subscribe = make(chan client, 100)
+	h.Subscribe = make(chan subscription, 100)
+
+	h.Subscriptions = make(map[string]map[client]bool)
 
 	for {
 		select {
@@ -38,13 +46,28 @@ func (h *hub) Run() {
 			h.ClientCount++
 		case _ = <-h.ClientDisconnect:
 			h.ClientCount--
+		case s := <-h.Subscribe:
+			if _, ok := h.Subscriptions[s.Channel]; !ok {
+				// TODO: Connect to redis
+				// New channel
+				h.Subscriptions[s.Channel] = make(map[client]bool)
+			}
+
+			h.Subscriptions[s.Channel][s.Client] = true
+
 		}
 	}
 }
 
 func (h *hub) Stats() (Stats, error) {
+	// TODO: Count in Redis
+	subscriptions := make(map[string]int)
+	for k, v := range h.Subscriptions {
+		subscriptions[k] = len(v)
+	}
+
 	return Stats{
-		// TODO: Count in Redis
-		Connections: h.ClientCount,
+		Connections:        h.ClientCount,
+		localSubscriptions: subscriptions,
 	}, nil
 }
