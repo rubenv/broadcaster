@@ -79,6 +79,7 @@ func (c *websocketClient) handshake(w http.ResponseWriter, r *http.Request) {
 				"channel": channel,
 			})
 		default:
+			c.Close(400, "Unexpected message")
 			break
 		}
 	}

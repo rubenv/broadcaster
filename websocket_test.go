@@ -170,3 +170,45 @@ func TestWSCanSubscribe(t *testing.T) {
 		t.Errorf("Unexpected subscription count: %d", stats.localSubscriptions["test"])
 	}
 }
+
+func TestWSMessageTypes(t *testing.T) {
+	server, err := startServer(nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer server.Stop()
+
+	client, err := newWSClient(server)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = client.Authenticate(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = client.Send("bla", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = client.Receive()
+	if err == nil {
+		t.Fatal("Expected error!")
+	}
+	if err.Error() != "websocket: close 400 Unexpected message" {
+		t.Fatal("Did not properly refuse message type")
+	}
+
+	stats, err := server.Broadcaster.Stats()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stats.Connections != 0 {
+		t.Errorf("Unexpected connection count: %d", stats.Connections)
+	}
+	if stats.localSubscriptions["test"] != 0 {
+		t.Errorf("Unexpected subscription count: %d", stats.localSubscriptions["test"])
+	}
+}
