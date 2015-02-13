@@ -2,7 +2,7 @@ package broadcaster
 
 import "testing"
 
-func TestConnect(t *testing.T) {
+func TestWSConnect(t *testing.T) {
 	server, err := startServer(nil, 0)
 	if err != nil {
 		t.Fatal(err)
@@ -28,7 +28,7 @@ func TestConnect(t *testing.T) {
 	}
 }
 
-func TestCanConnect(t *testing.T) {
+func TestWSCanConnect(t *testing.T) {
 	server, err := startServer(&Server{
 		CanConnect: func(data map[string]string) bool {
 			return false
@@ -61,7 +61,7 @@ func TestCanConnect(t *testing.T) {
 	}
 }
 
-func TestRefusesUnauthedCommands(t *testing.T) {
+func TestWSRefusesUnauthedCommands(t *testing.T) {
 	server, err := startServer(nil, 0)
 	if err != nil {
 		t.Fatal(err)
@@ -91,6 +91,37 @@ func TestRefusesUnauthedCommands(t *testing.T) {
 		t.Fatal(err)
 	}
 	if stats.Connections != 0 {
+		t.Errorf("Unexpected connection count: %d", stats.Connections)
+	}
+}
+
+func TestWSSubscribe(t *testing.T) {
+	server, err := startServer(nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer server.Stop()
+
+	client, err := newWSClient(server)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = client.Authenticate(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = client.Subscribe("test")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	stats, err := server.Broadcaster.Stats()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stats.Connections != 1 {
 		t.Errorf("Unexpected connection count: %d", stats.Connections)
 	}
 }

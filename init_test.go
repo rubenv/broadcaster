@@ -202,21 +202,42 @@ func (c *testWSClient) Authenticate(data map[string]string) error {
 		return err
 	}
 
-	if m.Type != "authOk" {
-		return fmt.Errorf("Expected authOk, got %s instead", m.Type)
+	if m["type"] != "authOk" {
+		return fmt.Errorf("Expected authOk, got %s instead", m["type"])
+	}
+	return nil
+}
+
+func (c *testWSClient) Subscribe(channel string) error {
+	err := c.Send("subscribe", clientMessage{"channel": channel})
+	if err != nil {
+		return err
+	}
+
+	m, err := c.Receive()
+	if err != nil {
+		return err
+	}
+
+	if m["type"] != "subscribeOk" {
+		return fmt.Errorf("Expected subscribeOk, got %s instead", m["type"])
+	}
+	if m["channel"] != channel {
+		return fmt.Errorf("Expected channel %s, got %s instead", channel, m["channel"])
 	}
 	return nil
 }
 
 func (c *testWSClient) Send(msg string, data map[string]string) error {
-	return c.Conn.WriteJSON(clientMessage{
-		Type: msg,
-		Data: data,
-	})
+	if data == nil {
+		data = make(map[string]string)
+	}
+	data["type"] = msg
+	return c.Conn.WriteJSON(data)
 }
 
-func (c *testWSClient) Receive() (*clientMessage, error) {
-	m := &clientMessage{}
-	err := c.Conn.ReadJSON(m)
+func (c *testWSClient) Receive() (clientMessage, error) {
+	m := clientMessage{}
+	err := c.Conn.ReadJSON(&m)
 	return m, err
 }

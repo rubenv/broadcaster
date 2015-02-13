@@ -24,12 +24,7 @@ type Server struct {
 	prepared bool
 }
 
-type clientMessage struct {
-	Id      string            `json:"id,omitempty"`
-	Type    string            `json:"type"`
-	Channel string            `json:"channel,omitempty"`
-	Data    map[string]string `json:"data,omitempty"`
-}
+type clientMessage map[string]string
 
 func (s *Server) Prepare() error {
 	s.hub.Server = s

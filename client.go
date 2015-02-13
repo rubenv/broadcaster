@@ -33,21 +33,55 @@ func (c *websocketClient) handshake(w http.ResponseWriter, r *http.Request) {
 	// Expect auth packet first.
 	auth := clientMessage{}
 	err = conn.ReadJSON(&auth)
-	if err != nil || auth.Type != "auth" {
+	if err != nil || auth["type"] != "auth" {
 		c.Close(401, "Auth expected")
 		return
 	}
 
-	if c.Server.CanConnect != nil && !c.Server.CanConnect(auth.Data) {
+	if c.Server.CanConnect != nil && !c.Server.CanConnect(auth) {
 		c.Close(401, "Unauthorized")
 		return
 	}
 
-	conn.WriteJSON(clientMessage{
-		Type: "authOk",
-	})
+	conn.WriteJSON(clientMessage{"type": "authOk"})
 
-	c.Server.hub.NewClient <- c
+	hub := c.Server.hub
+
+	hub.NewClient <- c
+
+	defer func() {
+		hub.ClientDisconnect <- c
+		conn.Close()
+	}()
+	m := clientMessage{}
+	for {
+		err := conn.ReadJSON(&m)
+		if err != nil {
+			c.Close(400, err.Error())
+			break
+		}
+
+		switch m["type"] {
+		case "subscribe":
+			channel := m["channel"]
+			if c.Server.CanSubscribe != nil && !c.Server.CanSubscribe(auth, channel) {
+				c.Close(403, "Channel refused")
+				continue
+			}
+
+			hub.Subscribe <- subscription{
+				Client:  c,
+				Channel: channel,
+			}
+
+			conn.WriteJSON(clientMessage{
+				"type":    "subscribeOk",
+				"channel": channel,
+			})
+		default:
+			break
+		}
+	}
 }
 
 func (c *websocketClient) Close(code uint16, msg string) {
