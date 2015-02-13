@@ -1,7 +1,6 @@
 package broadcaster
 
 import (
-	"errors"
 	"fmt"
 	"log"
 	"math/rand"
@@ -20,61 +19,55 @@ import (
 )
 
 var redisPort int
-var httpPort int
-var httpServer *Server
-var httpListener *stoppableListener.StoppableListener
-var httpWg sync.WaitGroup
 var redisClient redis.Conn
+var portSource = rand.New(rand.NewSource(26))
 
 func TestConnect(t *testing.T) {
-	err := startServer(nil)
+	server, err := startServer(nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer server.Stop()
+
+	_, err = newClient(server)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	_, err = newClient()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	stats := httpServer.Stats()
+	stats := server.Broadcaster.Stats()
 	if stats.Connections != 1 {
 		t.Errorf("Unexpected connection count: %d", stats.Connections)
 	}
-
-	stopServer()
 }
 
 func TestCanConnect(t *testing.T) {
-	err := startServer(&Server{
+	server, err := startServer(&Server{
 		CanConnect: func(r *http.Request) bool {
 			return false
 		},
-	})
+	}, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer server.Stop()
 
-	_, err = newClient()
+	_, err = newClient(server)
 	cerr := err.(clientError)
 	if err == nil || cerr.Response.StatusCode != 401 {
 		t.Fatal("Did properly deny access")
 	}
 
-	stats := httpServer.Stats()
+	stats := server.Broadcaster.Stats()
 	if stats.Connections != 0 {
 		t.Errorf("Unexpected connection count: %d", stats.Connections)
 	}
-
-	stopServer()
 }
 
 // Starts a redis server and uses that for the tests.
 func TestMain(m *testing.M) {
-	// Get random port for redis and HTTP server.
+	// Get random port for redis
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	redisPort = 24000 + r.Intn(1000)
-	httpPort = redisPort + 1
 
 	// Log files
 	serverOut, err := os.Create("/tmp/broadcaster-redis-server.log")
@@ -141,49 +134,67 @@ func TestMain(m *testing.M) {
 	code = m.Run()
 }
 
-func startServer(s *Server) error {
-	if httpListener != nil {
-		return errors.New("Already have a HTTP server running!")
+type testServer struct {
+	Port int
+
+	Listener    *stoppableListener.StoppableListener
+	Broadcaster *Server
+	HTTPServer  http.Server
+	wg          sync.WaitGroup
+}
+
+func startServer(s *Server, port int) (*testServer, error) {
+	if port == 0 {
+		// Fixed seed to reproducably get random ports
+		port = 25000 + portSource.Intn(1000)
 	}
-	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", httpPort))
+	server := &testServer{
+		Port:        port,
+		Broadcaster: s,
+	}
+	err := server.Start()
+	if err != nil {
+		return nil, err
+	}
+	return server, nil
+}
+
+func (s *testServer) Start() error {
+	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", s.Port))
 	if err != nil {
 		return err
 	}
 
-	httpListener, err = stoppableListener.New(listener)
+	httpListener, err := stoppableListener.New(listener)
 	if err != nil {
 		return err
 	}
 
-	if s == nil {
-		s = &Server{}
-	}
+	s.Listener = httpListener
 
-	httpServer = s
+	if s.Broadcaster == nil {
+		s.Broadcaster = &Server{}
+	}
 
 	mux := http.NewServeMux()
 
-	mux.Handle("/broadcaster/", s)
-	server := http.Server{Handler: mux}
+	mux.Handle("/broadcaster/", s.Broadcaster)
+	s.HTTPServer = http.Server{Handler: mux}
 
 	go func() {
-		httpWg.Add(1)
-		defer httpWg.Done()
-		err := server.Serve(httpListener)
+		s.wg.Add(1)
+		defer s.wg.Done()
+		err := s.HTTPServer.Serve(s.Listener)
 		log.Print(err)
 	}()
 
 	return nil
 }
 
-func stopServer() {
-	listener := httpListener
-	httpListener = nil
-	httpPort++
-
+func (s *testServer) Stop() {
 	go func() {
-		listener.Stop()
-		httpWg.Wait()
+		s.Listener.Stop()
+		s.wg.Wait()
 	}()
 }
 
@@ -196,8 +207,8 @@ func (e clientError) Error() string {
 	return e.ProtoError.Error()
 }
 
-func newClient() (*websocket.Conn, error) {
-	url := fmt.Sprintf("ws://localhost:%d/broadcaster/", httpPort)
+func newClient(s *testServer) (*websocket.Conn, error) {
+	url := fmt.Sprintf("ws://localhost:%d/broadcaster/", s.Port)
 
 	conn, resp, err := websocket.DefaultDialer.Dial(url, nil)
 	if err != nil {
