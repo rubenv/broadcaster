@@ -9,3 +9,5 @@ services:
 
 script:
     - go test -v -bench=.
+    - cat /tmp/broadcaster-redis-server.log
+    - cat /tmp/broadcaster-redis.log

@@ -24,6 +24,7 @@ var httpPort int
 var httpServer *Server
 var httpListener *stoppableListener.StoppableListener
 var httpWg sync.WaitGroup
+var redisClient redis.Conn
 
 func TestConnect(t *testing.T) {
 	err := startServer(nil)
@@ -75,9 +76,22 @@ func TestMain(m *testing.M) {
 	redisPort = 24000 + r.Intn(1000)
 	httpPort = redisPort + 1
 
+	// Log files
+	serverOut, err := os.Create("/tmp/broadcaster-redis-server.log")
+	if err != nil {
+		fmt.Printf("Could not open server log: %s", err.Error())
+		return
+	}
+	monitorOut, err := os.Create("/tmp/broadcaster-redis.log")
+	if err != nil {
+		fmt.Printf("Could not open monitor log: %s", err.Error())
+		return
+	}
+
 	// Start redis
 	cmd := exec.Command("redis-server", "--port", strconv.Itoa(redisPort))
-	err := cmd.Start()
+	cmd.Stdout = serverOut
+	err = cmd.Start()
 	if err != nil {
 		fmt.Printf("Could not start redis on port %d\n", redisPort)
 		os.Exit(1)
@@ -93,18 +107,31 @@ func TestMain(m *testing.M) {
 		}
 	}
 
+	// Redis client
+	redisClient, err = redis.Dial("tcp", fmt.Sprintf(":%d", redisPort))
+	if err != nil {
+		fmt.Println("Could not connect to redis")
+		os.Exit(1)
+	}
+
+	// Monitor the redis server to make debugging easier
+	monitorCmd := exec.Command("redis-cli", "-p", strconv.Itoa(redisPort), "monitor")
+	monitorCmd.Stdout = monitorOut
+	err = monitorCmd.Start()
+	if err != nil {
+		fmt.Printf("Could not start redis monitor\n")
+		os.Exit(1)
+	}
+
 	var code int
 
 	// Shut down redis when done
 	defer func() {
-		c, err := redis.Dial("tcp", fmt.Sprintf(":%d", redisPort))
-		if err != nil {
-			fmt.Println("Could not connect to redis for shutdown")
-			os.Exit(1)
-		}
-		defer c.Close()
+		defer redisClient.Close()
+		defer serverOut.Close()
+		defer monitorOut.Close()
 
-		c.Do("SHUTDOWN", "NOSAVE")
+		redisClient.Do("SHUTDOWN", "NOSAVE")
 		cmd.Wait()
 
 		os.Exit(code)
@@ -181,4 +208,9 @@ func newClient() (*websocket.Conn, error) {
 	}
 
 	return conn, nil
+}
+
+func sendMessage(channel, message string) error {
+	_, err := redisClient.Do("PUBLISH", channel, message)
+	return err
 }
