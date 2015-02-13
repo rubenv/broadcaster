@@ -25,7 +25,13 @@ type Server struct {
 }
 
 type Connection struct {
-	socket *websocket.Conn
+	authenticated bool
+	socket        *websocket.Conn
+}
+
+type clientMessage struct {
+	Id   string            `json:"id"`
+	Data map[string]string `json:"data"`
 }
 
 // Server statistics
