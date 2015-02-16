@@ -60,6 +60,12 @@ type Client struct {
 
 	// Data passed when authenticating
 	AuthData map[string]string
+
+	// Set when disconnecting
+	Error error
+
+	// Incoming messages
+	Messages chan clientMessage
 }
 ```
 
@@ -74,6 +80,12 @@ func NewClient(urlStr string) (*Client, error)
 
 ```go
 func (c *Client) Connect() error
+```
+
+#### func (*Client) Disconnect
+
+```go
+func (c *Client) Disconnect() error
 ```
 
 #### func (*Client) Subscribe

@@ -116,7 +116,11 @@ func (c *Client) Disconnect() error {
 	for _, r := range c.results {
 		close(r)
 	}
-	return c.conn.Close()
+	err := c.conn.Close()
+	if err != nil && c.Error == nil {
+		c.Error = err
+	}
+	return c.Error
 }
 
 func (c *Client) listen() {
