@@ -17,11 +17,19 @@ const (
 	ClientModeLongPoll  ClientMode = 2
 )
 
+type messageChan chan clientMessage
+
 type Client struct {
 	Mode ClientMode
 
 	// Data passed when authenticating
 	AuthData map[string]string
+
+	// Set when disconnecting
+	Error error
+
+	// Incoming messages
+	Messages chan clientMessage
 
 	// Connection params
 	host   string
@@ -33,6 +41,8 @@ type Client struct {
 
 	// Websocket connection
 	conn *websocket.Conn
+
+	results map[string]messageChan
 }
 
 func NewClient(urlStr string) (*Client, error) {
@@ -74,25 +84,61 @@ func (c *Client) Connect() error {
 
 	c.conn = conn
 
-	if c.skip_auth {
-		return nil
+	// Make sure we have a messages channel
+	if c.Messages == nil {
+		c.Messages = make(messageChan, 10)
 	}
 
 	// Authenticate
-	err = c.send("auth", c.AuthData)
-	if err != nil {
-		return err
+	if !c.skip_auth {
+		err = c.send(AuthMessage, c.AuthData)
+		if err != nil {
+			return err
+		}
+
+		m, err := c.receive()
+		if err != nil {
+			return err
+		}
+
+		if m["type"] != AuthOKMessage {
+			return fmt.Errorf("Expected authOk, got %s instead", m["type"])
+		}
 	}
 
-	m, err := c.receive()
-	if err != nil {
-		return err
-	}
+	go c.listen()
 
-	if m["type"] != "authOk" {
-		return fmt.Errorf("Expected authOk, got %s instead", m["type"])
-	}
 	return nil
+}
+
+func (c *Client) Disconnect() error {
+	close(c.Messages)
+	for _, r := range c.results {
+		close(r)
+	}
+	return c.conn.Close()
+}
+
+func (c *Client) listen() {
+	for {
+		m, err := c.receive()
+		if err != nil {
+			c.Error = err
+			c.Disconnect()
+			return
+		}
+
+		if m["type"] == MessageMessage {
+			c.Messages <- m
+		} else {
+			channel, ok := c.results[m.ResultId()]
+			if !ok {
+				// Unrequested result?
+			} else {
+				channel <- m
+			}
+		}
+	}
 }
 
 func (c *Client) send(msg string, data map[string]string) error {
@@ -109,13 +155,33 @@ func (c *Client) receive() (clientMessage, error) {
 	return m, err
 }
 
-func (c *Client) Subscribe(channel string) error {
-	err := c.send("subscribe", clientMessage{"channel": channel})
+func (c *Client) resultChan(format string, args ...interface{}) chan clientMessage {
+	if c.results == nil {
+		c.results = make(map[string]messageChan)
+	}
+	name := fmt.Sprintf(format, args...)
+	channel := make(chan clientMessage, 1)
+	c.results[name] = channel
+	return channel
+}
+
+func (c *Client) call(msgType string, msg clientMessage) (clientMessage, error) {
+	result := c.resultChan("%s_%s", msgType, msg["channel"])
+
+	err := c.send(msgType, msg)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	m, err := c.receive()
+	m, ok := <-result
+	if !ok {
+		return nil, c.Error
+	}
+	return m, nil
+}
+
+func (c *Client) Subscribe(channel string) error {
+	m, err := c.call(SubscribeMessage, clientMessage{"channel": channel})
 	if err != nil {
 		return err
 	}
@@ -130,12 +196,7 @@ func (c *Client) Subscribe(channel string) error {
 }
 
 func (c *Client) Unsubscribe(channel string) error {
-	err := c.send(UnsubscribeMessage, clientMessage{"channel": channel})
-	if err != nil {
-		return err
-	}
-
-	m, err := c.receive()
+	m, err := c.call(UnsubscribeMessage, clientMessage{"channel": channel})
 	if err != nil {
 		return err
 	}

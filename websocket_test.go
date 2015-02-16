@@ -231,11 +231,7 @@ func TestWSMessage(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	m, err := client.receive()
-	if err != nil {
-		t.Fatal(err)
-	}
-
+	m := <-client.Messages
 	if m["type"] != "message" || m["channel"] != "test" || m["body"] != "Test message" {
 		t.Error("Wrong message payload")
 	}
