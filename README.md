@@ -76,18 +76,6 @@ func NewClient(urlStr string) (*Client, error)
 func (c *Client) Connect() error
 ```
 
-#### func (*Client) Receive
-
-```go
-func (c *Client) Receive() (clientMessage, error)
-```
-
-#### func (*Client) Send
-
-```go
-func (c *Client) Send(msg string, data map[string]string) error
-```
-
 #### func (*Client) Subscribe
 
 ```go

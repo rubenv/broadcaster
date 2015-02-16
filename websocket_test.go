@@ -84,12 +84,12 @@ func TestWSRefusesUnauthedCommands(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = client.Send("bla", nil)
+	err = client.send("bla", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	_, err = client.Receive()
+	_, err = client.receive()
 	if err == nil {
 		t.Fatal("Expected error!")
 	}
@@ -184,12 +184,12 @@ func TestWSMessageTypes(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = client.Send("bla", nil)
+	err = client.send("bla", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	_, err = client.Receive()
+	_, err = client.receive()
 	if err == nil {
 		t.Fatal("Expected error!")
 	}
@@ -231,7 +231,7 @@ func TestWSMessage(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	m, err := client.Receive()
+	m, err := client.receive()
 	if err != nil {
 		t.Fatal(err)
 	}

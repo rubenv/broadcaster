@@ -79,12 +79,12 @@ func (c *Client) Connect() error {
 	}
 
 	// Authenticate
-	err = c.Send("auth", c.AuthData)
+	err = c.send("auth", c.AuthData)
 	if err != nil {
 		return err
 	}
 
-	m, err := c.Receive()
+	m, err := c.receive()
 	if err != nil {
 		return err
 	}
@@ -95,7 +95,7 @@ func (c *Client) Connect() error {
 	return nil
 }
 
-func (c *Client) Send(msg string, data map[string]string) error {
+func (c *Client) send(msg string, data map[string]string) error {
 	if data == nil {
 		data = make(map[string]string)
 	}
@@ -103,19 +103,19 @@ func (c *Client) Send(msg string, data map[string]string) error {
 	return c.conn.WriteJSON(data)
 }
 
-func (c *Client) Receive() (clientMessage, error) {
+func (c *Client) receive() (clientMessage, error) {
 	m := clientMessage{}
 	err := c.conn.ReadJSON(&m)
 	return m, err
 }
 
 func (c *Client) Subscribe(channel string) error {
-	err := c.Send("subscribe", clientMessage{"channel": channel})
+	err := c.send("subscribe", clientMessage{"channel": channel})
 	if err != nil {
 		return err
 	}
 
-	m, err := c.Receive()
+	m, err := c.receive()
 	if err != nil {
 		return err
 	}
@@ -130,12 +130,12 @@ func (c *Client) Subscribe(channel string) error {
 }
 
 func (c *Client) Unsubscribe(channel string) error {
-	err := c.Send(UnsubscribeMessage, clientMessage{"channel": channel})
+	err := c.send(UnsubscribeMessage, clientMessage{"channel": channel})
 	if err != nil {
 		return err
 	}
 
-	m, err := c.Receive()
+	m, err := c.receive()
 	if err != nil {
 		return err
 	}
