@@ -30,6 +30,7 @@ type Server struct {
 	prepared bool
 }
 
+// Message types used between server and client.
 const (
 	// Client: start authentication
 	AuthMessage = "auth"

@@ -44,6 +44,7 @@ const (
 	MessageMessage = "message"
 )
 ```
+Message types used between server and client.
 
 #### type Server
 
