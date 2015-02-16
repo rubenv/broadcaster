@@ -7,7 +7,9 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-type client interface{}
+type client interface {
+	Send(channel, message string)
+}
 
 // Websocket clients
 type websocketClient struct {
@@ -69,15 +71,28 @@ func (c *websocketClient) handshake(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 
-			hub.Subscribe <- subscription{
+			s := &subscription{
 				Client:  c,
 				Channel: channel,
+				Done:    make(chan error, 0),
 			}
 
-			conn.WriteJSON(clientMessage{
-				"type":    "subscribeOk",
-				"channel": channel,
-			})
+			hub.Subscribe <- s
+
+			err := <-s.Done
+			if err != nil {
+				conn.WriteJSON(clientMessage{
+					"type":    "subscribeError",
+					"channel": channel,
+					"error":   err.Error(),
+				})
+			} else {
+				conn.WriteJSON(clientMessage{
+					"type":    "subscribeOk",
+					"channel": channel,
+				})
+			}
+
 		default:
 			c.Close(400, "Unexpected message")
 			break
@@ -91,4 +106,12 @@ func (c *websocketClient) Close(code uint16, msg string) {
 	payload = append(payload, []byte(msg)...)
 	c.Conn.WriteMessage(websocket.CloseMessage, payload)
 	c.Conn.Close()
+}
+
+func (c *websocketClient) Send(channel, message string) {
+	c.Conn.WriteJSON(clientMessage{
+		"type":    "message",
+		"channel": channel,
+		"body":    message,
+	})
 }

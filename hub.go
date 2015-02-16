@@ -8,12 +8,16 @@ type hub struct {
 	// Channels
 	NewClient        chan client
 	ClientDisconnect chan client
-	Subscribe        chan subscription
 
-	Subscriptions map[string]map[client]bool
+	Subscribe chan *subscription
 
-	Redis  redis.Conn
-	PubSub redis.PubSubConn
+	messages   chan redis.Message
+	subscribed chan *subscriptionResult
+
+	subscriptions map[string]map[client]*subscription
+
+	redis  redis.Conn
+	pubSub redis.PubSubConn
 
 	ClientCount int
 }
@@ -21,6 +25,12 @@ type hub struct {
 type subscription struct {
 	Client  client
 	Channel string
+	Done    chan error
+}
+
+type subscriptionResult struct {
+	Channel string
+	Error   error
 }
 
 // Server statistics
@@ -41,27 +51,33 @@ func (h *hub) Prepare(redisHost, pubSubHost string) error {
 	}
 	h.NewClient = make(chan client, 10)
 	h.ClientDisconnect = make(chan client, 10)
-	h.Subscribe = make(chan subscription, 100)
+	h.Subscribe = make(chan *subscription, 100)
 
-	h.Subscriptions = make(map[string]map[client]bool)
+	// Internal channels
+	h.messages = make(chan redis.Message, 250)
+	h.subscribed = make(chan *subscriptionResult, 5)
+
+	h.subscriptions = make(map[string]map[client]*subscription)
 
 	r, err := redis.Dial("tcp", redisHost)
 	if err != nil {
 		return err
 	}
-	h.Redis = r
+	h.redis = r
 
 	p, err := redis.Dial("tcp", pubSubHost)
 	if err != nil {
-		h.Redis.Close()
+		h.redis.Close()
 		return err
 	}
-	h.PubSub = redis.PubSubConn{Conn: p}
+	h.pubSub = redis.PubSubConn{Conn: p}
 
 	return nil
 }
 
 func (h *hub) Run() {
+	go h.receive()
+
 	for {
 		select {
 		case _ = <-h.NewClient:
@@ -69,13 +85,46 @@ func (h *hub) Run() {
 		case _ = <-h.ClientDisconnect:
 			h.ClientCount--
 		case s := <-h.Subscribe:
-			if _, ok := h.Subscriptions[s.Channel]; !ok {
-				// TODO: Connect to redis
+			if _, ok := h.subscriptions[s.Channel]; !ok {
 				// New channel
-				h.Subscriptions[s.Channel] = make(map[client]bool)
+				h.subscriptions[s.Channel] = make(map[client]*subscription)
+				err := h.pubSub.Subscribe(s.Channel)
+				if err != nil {
+					s.Done <- err
+				}
+			} else {
+				s.Done <- nil
 			}
 
-			h.Subscriptions[s.Channel][s.Client] = true
+			h.subscriptions[s.Channel][s.Client] = s
+		case r := <-h.subscribed:
+			for _, subscription := range h.subscriptions[r.Channel] {
+				if subscription.Done != nil {
+					subscription.Done <- r.Error
+					subscription.Done = nil
+				}
+			}
+		case m := <-h.messages:
+			for client, _ := range h.subscriptions[m.Channel] {
+				client.Send(m.Channel, string(m.Data))
+			}
+		}
+	}
+}
+
+func (h *hub) receive() {
+	for {
+		switch v := h.pubSub.Receive().(type) {
+		case redis.Message:
+			h.messages <- v
+		case redis.Subscription:
+			h.subscribed <- &subscriptionResult{
+				Channel: v.Channel,
+				Error:   nil,
+			}
+		case error:
+			// Server stopped?
+			return
 		}
 	}
 }
@@ -83,7 +132,7 @@ func (h *hub) Run() {
 func (h *hub) Stats() (Stats, error) {
 	// TODO: Count in Redis
 	subscriptions := make(map[string]int)
-	for k, v := range h.Subscriptions {
+	for k, v := range h.subscriptions {
 		subscriptions[k] = len(v)
 	}
 

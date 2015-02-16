@@ -41,8 +41,9 @@ func TestMain(m *testing.M) {
 	}
 
 	// Start redis
-	cmd := exec.Command("redis-server", "--port", strconv.Itoa(redisPort))
+	cmd := exec.Command("redis-server", "--port", strconv.Itoa(redisPort), "--loglevel", "debug")
 	cmd.Stdout = serverOut
+	cmd.Stderr = serverOut
 	err = cmd.Start()
 	if err != nil {
 		fmt.Printf("Could not start redis on port %d\n", redisPort)
@@ -69,6 +70,7 @@ func TestMain(m *testing.M) {
 	// Monitor the redis server to make debugging easier
 	monitorCmd := exec.Command("redis-cli", "-p", strconv.Itoa(redisPort), "monitor")
 	monitorCmd.Stdout = monitorOut
+	monitorCmd.Stderr = monitorOut
 	err = monitorCmd.Start()
 	if err != nil {
 		fmt.Printf("Could not start redis monitor\n")
@@ -82,6 +84,8 @@ func TestMain(m *testing.M) {
 		defer redisClient.Close()
 		defer serverOut.Close()
 		defer monitorOut.Close()
+
+		monitorCmd.Process.Kill()
 
 		redisClient.Do("SHUTDOWN", "NOSAVE")
 		cmd.Wait()
@@ -135,7 +139,7 @@ func (s *testServer) Start() error {
 		s.Broadcaster = &Server{}
 	}
 
-	s.Broadcaster.RedisHost = fmt.Sprintf("localhost:%d", s.Port)
+	s.Broadcaster.RedisHost = fmt.Sprintf("localhost:%d", redisPort)
 
 	err = s.Broadcaster.Prepare()
 	if err != nil {

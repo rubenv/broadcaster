@@ -212,3 +212,40 @@ func TestWSMessageTypes(t *testing.T) {
 		t.Errorf("Unexpected subscription count: %d", stats.localSubscriptions["test"])
 	}
 }
+
+func TestWSMessage(t *testing.T) {
+	server, err := startServer(nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer server.Stop()
+
+	client, err := newWSClient(server)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = client.Authenticate(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = client.Subscribe("test")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = sendMessage("test", "Test message")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	m, err := client.Receive()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if m["type"] != "message" || m["channel"] != "test" || m["body"] != "Test message" {
+		t.Error("Wrong message payload")
+	}
+}
