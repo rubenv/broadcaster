@@ -51,6 +51,25 @@ func TestWSCanConnect(t *testing.T) {
 	}
 }
 
+func TestWSAuthData(t *testing.T) {
+	server, err := startServer(&Server{
+		CanConnect: func(data map[string]string) bool {
+			return data["token"] == "abcdefg"
+		},
+	}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer server.Stop()
+
+	_, err = newWSClient(server, func(c *Client) {
+		c.AuthData = map[string]string{"token": "abcdefg"}
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestWSRefusesUnauthedCommands(t *testing.T) {
 	server, err := startServer(nil, 0)
 	if err != nil {
