@@ -9,7 +9,8 @@ type hub struct {
 	NewClient        chan client
 	ClientDisconnect chan client
 
-	Subscribe chan *subscription
+	Subscribe   chan *subscription
+	Unsubscribe chan *subscription
 
 	messages   chan redis.Message
 	subscribed chan *subscriptionResult
@@ -52,6 +53,7 @@ func (h *hub) Prepare(redisHost, pubSubHost string) error {
 	h.NewClient = make(chan client, 10)
 	h.ClientDisconnect = make(chan client, 10)
 	h.Subscribe = make(chan *subscription, 100)
+	h.Unsubscribe = make(chan *subscription, 100)
 
 	// Internal channels
 	h.messages = make(chan redis.Message, 250)
@@ -75,6 +77,7 @@ func (h *hub) Prepare(redisHost, pubSubHost string) error {
 	return nil
 }
 
+// Main state machine, ensures that we don't have to care about synchronization.
 func (h *hub) Run() {
 	go h.receive()
 
@@ -85,29 +88,13 @@ func (h *hub) Run() {
 		case _ = <-h.ClientDisconnect:
 			h.ClientCount--
 		case s := <-h.Subscribe:
-			if _, ok := h.subscriptions[s.Channel]; !ok {
-				// New channel
-				h.subscriptions[s.Channel] = make(map[client]*subscription)
-				err := h.pubSub.Subscribe(s.Channel)
-				if err != nil {
-					s.Done <- err
-				}
-			} else {
-				s.Done <- nil
-			}
-
-			h.subscriptions[s.Channel][s.Client] = s
+			h.handleSubscribe(s)
+		case s := <-h.Unsubscribe:
+			h.handleUnsubscribe(s)
 		case r := <-h.subscribed:
-			for _, subscription := range h.subscriptions[r.Channel] {
-				if subscription.Done != nil {
-					subscription.Done <- r.Error
-					subscription.Done = nil
-				}
-			}
+			h.handleSubscribed(r)
 		case m := <-h.messages:
-			for client, _ := range h.subscriptions[m.Channel] {
-				client.Send(m.Channel, string(m.Data))
-			}
+			h.handleMessage(m)
 		}
 	}
 }
@@ -140,4 +127,45 @@ func (h *hub) Stats() (Stats, error) {
 		Connections:        h.ClientCount,
 		localSubscriptions: subscriptions,
 	}, nil
+}
+
+func (h *hub) handleSubscribe(s *subscription) {
+	if _, ok := h.subscriptions[s.Channel]; !ok {
+		// New channel
+		h.subscriptions[s.Channel] = make(map[client]*subscription)
+		err := h.pubSub.Subscribe(s.Channel)
+		if err != nil {
+			s.Done <- err
+		}
+	} else {
+		s.Done <- nil
+	}
+
+	h.subscriptions[s.Channel][s.Client] = s
+}
+
+func (h *hub) handleUnsubscribe(s *subscription) {
+	delete(h.subscriptions[s.Channel], s.Client)
+	if len(h.subscriptions[s.Channel]) == 0 {
+		// Channel no longer needed
+		h.pubSub.Unsubscribe(s.Channel)
+		delete(h.subscriptions, s.Channel)
+	}
+
+	s.Done <- nil
+}
+
+func (h *hub) handleSubscribed(r *subscriptionResult) {
+	for _, subscription := range h.subscriptions[r.Channel] {
+		if subscription.Done != nil {
+			subscription.Done <- r.Error
+			subscription.Done = nil
+		}
+	}
+}
+
+func (h *hub) handleMessage(m redis.Message) {
+	for client, _ := range h.subscriptions[m.Channel] {
+		client.Send(m.Channel, string(m.Data))
+	}
 }

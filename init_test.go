@@ -234,6 +234,26 @@ func (c *testWSClient) Subscribe(channel string) error {
 	return nil
 }
 
+func (c *testWSClient) Unsubscribe(channel string) error {
+	err := c.Send(UnsubscribeMessage, clientMessage{"channel": channel})
+	if err != nil {
+		return err
+	}
+
+	m, err := c.Receive()
+	if err != nil {
+		return err
+	}
+
+	if m["type"] != "unsubscribeOk" {
+		return fmt.Errorf("Expected subscribeOk, got %s instead", m["type"])
+	}
+	if m["channel"] != channel {
+		return fmt.Errorf("Expected channel %s, got %s instead", channel, m["channel"])
+	}
+	return nil
+}
+
 func (c *testWSClient) Send(msg string, data map[string]string) error {
 	if data == nil {
 		data = make(map[string]string)

@@ -88,6 +88,21 @@ func (c *websocketClient) handshake(w http.ResponseWriter, r *http.Request) {
 				})
 			}
 
+		case UnsubscribeMessage:
+			channel := m["channel"]
+
+			s := &subscription{
+				Client:  c,
+				Channel: channel,
+				Done:    make(chan error, 0),
+			}
+
+			hub.Unsubscribe <- s
+			conn.WriteJSON(clientMessage{
+				"type":    UnsubscribeOKMessage,
+				"channel": channel,
+			})
+
 		default:
 			c.Close(400, "Unexpected message")
 			break

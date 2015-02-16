@@ -49,6 +49,12 @@ const (
 
 	// Server: Broadcast message
 	MessageMessage = "message"
+
+	// Client: Unsubscribe from channel
+	UnsubscribeMessage = "unsubscribe"
+
+	// Server: Unsubscribe succeeded
+	UnsubscribeOKMessage = "unsubscribeOk"
 )
 
 type clientMessage map[string]string

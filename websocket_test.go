@@ -249,3 +249,42 @@ func TestWSMessage(t *testing.T) {
 		t.Error("Wrong message payload")
 	}
 }
+
+func TestWSUnsubscribe(t *testing.T) {
+	server, err := startServer(nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer server.Stop()
+
+	client, err := newWSClient(server)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = client.Authenticate(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = client.Subscribe("test")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = client.Unsubscribe("test")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	stats, err := server.Broadcaster.Stats()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stats.Connections != 1 {
+		t.Errorf("Unexpected connection count: %d", stats.Connections)
+	}
+	if stats.localSubscriptions["test"] != 0 {
+		t.Errorf("Unexpected subscription count: %d", stats.localSubscriptions["test"])
+	}
+}
