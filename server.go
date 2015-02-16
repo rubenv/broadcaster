@@ -30,6 +30,26 @@ type Server struct {
 	prepared bool
 }
 
+const (
+	// Client: start authentication
+	AuthMessage = "auth"
+
+	// Server: Authentication succeeded
+	AuthOKMessage = "authOk"
+
+	// Client: Subscribe to channel
+	SubscribeMessage = "subscribe"
+
+	// Server: Subscribe succeeded
+	SubscribeOKMessage = "subscribeOk"
+
+	// Server: Subscribe failed
+	SubscribeErrorMessage = "subscribeError"
+
+	// Server: Broadcast message
+	MessageMessage = "message"
+)
+
 type clientMessage map[string]string
 
 func (s *Server) Prepare() error {

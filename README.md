@@ -23,6 +23,28 @@ import "github.com/rubenv/broadcaster"
 
 ## Usage
 
+```go
+const (
+	// Client: start authentication
+	AuthMessage = "auth"
+
+	// Server: Authentication succeeded
+	AuthOKMessage = "authOk"
+
+	// Client: Subscribe to channel
+	SubscribeMessage = "subscribe"
+
+	// Server: Subscribe succeeded
+	SubscribeOKMessage = "subscribeOk"
+
+	// Server: Subscribe failed
+	SubscribeErrorMessage = "subscribeError"
+
+	// Server: Broadcast message
+	MessageMessage = "message"
+)
+```
+
 #### type Server
 
 ```go
@@ -37,6 +59,12 @@ type Server struct {
 	// Can be used to configure buffer sizes etc.
 	// See http://godoc.org/github.com/gorilla/websocket#Upgrader
 	Upgrader websocket.Upgrader
+
+	// Redis host, used for data, defaults to localhost:6379
+	RedisHost string
+
+	// PubSub host, used for pubsub, defaults to RedisHost
+	PubSubHost string
 }
 ```
 
