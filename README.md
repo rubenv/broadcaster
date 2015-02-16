@@ -42,9 +42,80 @@ const (
 
 	// Server: Broadcast message
 	MessageMessage = "message"
+
+	// Client: Unsubscribe from channel
+	UnsubscribeMessage = "unsubscribe"
+
+	// Server: Unsubscribe succeeded
+	UnsubscribeOKMessage = "unsubscribeOk"
 )
 ```
 Message types used between server and client.
+
+#### type Client
+
+```go
+type Client struct {
+	Mode ClientMode
+
+	// Data passed when authenticating
+	AuthData map[string]string
+}
+```
+
+
+#### func  NewClient
+
+```go
+func NewClient(urlStr string) (*Client, error)
+```
+
+#### func (*Client) Connect
+
+```go
+func (c *Client) Connect() error
+```
+
+#### func (*Client) Receive
+
+```go
+func (c *Client) Receive() (clientMessage, error)
+```
+
+#### func (*Client) Send
+
+```go
+func (c *Client) Send(msg string, data map[string]string) error
+```
+
+#### func (*Client) Subscribe
+
+```go
+func (c *Client) Subscribe(channel string) error
+```
+
+#### func (*Client) Unsubscribe
+
+```go
+func (c *Client) Unsubscribe(channel string) error
+```
+
+#### type ClientMode
+
+```go
+type ClientMode int
+```
+
+Client connection mode.
+
+```go
+const (
+	ClientModeAuto      ClientMode = 0
+	ClientModeWebsocket ClientMode = 1
+	ClientModeLongPoll  ClientMode = 2
+)
+```
+Connection modes, can be used to force a specific connection type.
 
 #### type Server
 

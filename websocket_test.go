@@ -9,12 +9,7 @@ func TestWSConnect(t *testing.T) {
 	}
 	defer server.Stop()
 
-	client, err := newWSClient(server)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = client.Authenticate(nil)
+	_, err = newWSClient(server)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -39,12 +34,7 @@ func TestWSCanConnect(t *testing.T) {
 	}
 	defer server.Stop()
 
-	client, err := newWSClient(server)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = client.Authenticate(nil)
+	_, err = newWSClient(server)
 	if err == nil {
 		t.Fatal("Expected error!")
 	}
@@ -68,7 +58,9 @@ func TestWSRefusesUnauthedCommands(t *testing.T) {
 	}
 	defer server.Stop()
 
-	client, err := newWSClient(server)
+	client, err := newWSClient(server, func(c *Client) {
+		c.skip_auth = true
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,11 +99,6 @@ func TestWSSubscribe(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = client.Authenticate(nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	err = client.Subscribe("test")
 	if err != nil {
 		t.Fatal(err)
@@ -145,11 +132,6 @@ func TestWSCanSubscribe(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = client.Authenticate(nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	err = client.Subscribe("test")
 	if err == nil {
 		t.Fatal("Expected error!")
@@ -179,11 +161,6 @@ func TestWSMessageTypes(t *testing.T) {
 	defer server.Stop()
 
 	client, err := newWSClient(server)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = client.Authenticate(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -225,11 +202,6 @@ func TestWSMessage(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = client.Authenticate(nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	err = client.Subscribe("test")
 	if err != nil {
 		t.Fatal(err)
@@ -258,11 +230,6 @@ func TestWSUnsubscribe(t *testing.T) {
 	defer server.Stop()
 
 	client, err := newWSClient(server)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = client.Authenticate(nil)
 	if err != nil {
 		t.Fatal(err)
 	}

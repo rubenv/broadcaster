@@ -7,19 +7,19 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-type websocketClient struct {
+type websocketConnection struct {
 	Conn   *websocket.Conn
 	Server *Server
 }
 
-func newWebsocketClient(w http.ResponseWriter, r *http.Request, s *Server) {
-	client := &websocketClient{
+func newWebsocketConnection(w http.ResponseWriter, r *http.Request, s *Server) {
+	client := &websocketConnection{
 		Server: s,
 	}
 	client.handshake(w, r)
 }
 
-func (c *websocketClient) handshake(w http.ResponseWriter, r *http.Request) {
+func (c *websocketConnection) handshake(w http.ResponseWriter, r *http.Request) {
 	conn, err := c.Server.Upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		http.Error(w, err.Error(), 400)
@@ -110,7 +110,7 @@ func (c *websocketClient) handshake(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (c *websocketClient) Close(code uint16, msg string) {
+func (c *websocketConnection) Close(code uint16, msg string) {
 	payload := make([]byte, 2)
 	binary.BigEndian.PutUint16(payload, code)
 	payload = append(payload, []byte(msg)...)
@@ -118,7 +118,7 @@ func (c *websocketClient) Close(code uint16, msg string) {
 	c.Conn.Close()
 }
 
-func (c *websocketClient) Send(channel, message string) {
+func (c *websocketConnection) Send(channel, message string) {
 	c.Conn.WriteJSON(clientMessage{
 		"type":    MessageMessage,
 		"channel": channel,

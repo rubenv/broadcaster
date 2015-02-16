@@ -57,6 +57,10 @@ const (
 	UnsubscribeOKMessage = "unsubscribeOk"
 )
 
+type connection interface {
+	Send(channel, message string)
+}
+
 type clientMessage map[string]string
 
 func (s *Server) Prepare() error {
@@ -86,7 +90,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleWebsocket(w http.ResponseWriter, r *http.Request) {
 	// Always a new client, easy!
-	newWebsocketClient(w, r, s)
+	newWebsocketConnection(w, r, s)
 }
 
 func (s *Server) handleLongPoll(w http.ResponseWriter, r *http.Request) {

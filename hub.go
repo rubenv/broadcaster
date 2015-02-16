@@ -6,8 +6,8 @@ type hub struct {
 	Running bool
 
 	// Channels
-	NewClient        chan client
-	ClientDisconnect chan client
+	NewClient        chan connection
+	ClientDisconnect chan connection
 
 	Subscribe   chan *subscription
 	Unsubscribe chan *subscription
@@ -15,7 +15,7 @@ type hub struct {
 	messages   chan redis.Message
 	subscribed chan *subscriptionResult
 
-	subscriptions map[string]map[client]*subscription
+	subscriptions map[string]map[connection]*subscription
 
 	redis  redis.Conn
 	pubSub redis.PubSubConn
@@ -24,7 +24,7 @@ type hub struct {
 }
 
 type subscription struct {
-	Client  client
+	Client  connection
 	Channel string
 	Done    chan error
 }
@@ -50,8 +50,8 @@ func (h *hub) Prepare(redisHost, pubSubHost string) error {
 	if pubSubHost == "" {
 		pubSubHost = redisHost
 	}
-	h.NewClient = make(chan client, 10)
-	h.ClientDisconnect = make(chan client, 10)
+	h.NewClient = make(chan connection, 10)
+	h.ClientDisconnect = make(chan connection, 10)
 	h.Subscribe = make(chan *subscription, 100)
 	h.Unsubscribe = make(chan *subscription, 100)
 
@@ -59,7 +59,7 @@ func (h *hub) Prepare(redisHost, pubSubHost string) error {
 	h.messages = make(chan redis.Message, 250)
 	h.subscribed = make(chan *subscriptionResult, 5)
 
-	h.subscriptions = make(map[string]map[client]*subscription)
+	h.subscriptions = make(map[string]map[connection]*subscription)
 
 	r, err := redis.Dial("tcp", redisHost)
 	if err != nil {
@@ -132,7 +132,7 @@ func (h *hub) Stats() (Stats, error) {
 func (h *hub) handleSubscribe(s *subscription) {
 	if _, ok := h.subscriptions[s.Channel]; !ok {
 		// New channel
-		h.subscriptions[s.Channel] = make(map[client]*subscription)
+		h.subscriptions[s.Channel] = make(map[connection]*subscription)
 		err := h.pubSub.Subscribe(s.Channel)
 		if err != nil {
 			s.Done <- err
@@ -165,7 +165,7 @@ func (h *hub) handleSubscribed(r *subscriptionResult) {
 }
 
 func (h *hub) handleMessage(m redis.Message) {
-	for client, _ := range h.subscriptions[m.Channel] {
-		client.Send(m.Channel, string(m.Data))
+	for connection, _ := range h.subscriptions[m.Channel] {
+		connection.Send(m.Channel, string(m.Data))
 	}
 }
