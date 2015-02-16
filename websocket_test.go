@@ -237,12 +237,12 @@ func TestWSMessage(t *testing.T) {
 	}
 
 	m := <-client.Messages
-	if m["type"] != "message" || m["channel"] != "test" || m["body"] != "Test message" {
+	if m.Type() != "message" || m["channel"] != "test" || m["body"] != "Test message" {
 		t.Error("Wrong message payload")
 	}
 
 	m = <-client.Messages
-	if m["type"] != "message" || m["channel"] != "test" || m["body"] != "Test message 2" {
+	if m.Type() != "message" || m["channel"] != "test" || m["body"] != "Test message 2" {
 		t.Error("Wrong message payload")
 	}
 }

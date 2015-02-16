@@ -30,7 +30,7 @@ func (c *websocketConnection) handshake(w http.ResponseWriter, r *http.Request) 
 	// Expect auth packet first.
 	auth := clientMessage{}
 	err = conn.ReadJSON(&auth)
-	if err != nil || auth["type"] != AuthMessage {
+	if err != nil || auth.Type() != AuthMessage {
 		c.Close(401, "Auth expected")
 		return
 	}
@@ -58,7 +58,7 @@ func (c *websocketConnection) handshake(w http.ResponseWriter, r *http.Request) 
 			break
 		}
 
-		switch m["type"] {
+		switch m.Type() {
 		case SubscribeMessage:
 			channel := m["channel"]
 			if c.Server.CanSubscribe != nil && !c.Server.CanSubscribe(auth, channel) {
@@ -124,4 +124,46 @@ func (c *websocketConnection) Send(channel, message string) {
 		"channel": channel,
 		"body":    message,
 	})
+}
+
+type websocketClientTransport struct {
+	conn   *websocket.Conn
+	client *Client
+}
+
+func (t *websocketClientTransport) Connect(authData map[string]string) error {
+	conn, _, err := websocket.DefaultDialer.Dial(t.client.url(), nil)
+	if err != nil {
+		return err
+	}
+
+	t.conn = conn
+
+	// Authenticate
+	if !t.client.skip_auth {
+		data := authData
+		if data == nil {
+			data = make(map[string]string)
+		}
+		data["type"] = AuthMessage
+		err := t.Send(data)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (t *websocketClientTransport) Close() error {
+	return t.conn.Close()
+}
+
+func (t *websocketClientTransport) Send(data clientMessage) error {
+	return t.conn.WriteJSON(data)
+}
+
+func (t *websocketClientTransport) Receive() (clientMessage, error) {
+	m := clientMessage{}
+	err := t.conn.ReadJSON(&m)
+	return m, err
 }

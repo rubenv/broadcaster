@@ -1,6 +1,7 @@
 package broadcaster
 
 import (
+	"encoding/json"
 	"net/http"
 
 	"github.com/gorilla/websocket"
@@ -65,6 +66,11 @@ func (s *Server) handleWebsocket(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleLongPoll(w http.ResponseWriter, r *http.Request) {
+	json.NewEncoder(w).Encode([]clientMessage{
+		clientMessage{
+			"type": "fail",
+		},
+	})
 }
 
 func (s *Server) Stats() (Stats, error) {

@@ -48,6 +48,9 @@ const (
 
 	// Server: Unsubscribe succeeded
 	UnsubscribeOKMessage = "unsubscribeOk"
+
+	// Client: Send me more messages
+	PollMessage = "poll"
 )
 ```
 Message types used between server and client.

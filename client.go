@@ -3,8 +3,6 @@ package broadcaster
 import (
 	"fmt"
 	"net/url"
-
-	"github.com/gorilla/websocket"
 )
 
 // Client connection mode.
@@ -39,10 +37,9 @@ type Client struct {
 	// Only used while testing
 	skip_auth bool
 
-	// Websocket connection
-	conn *websocket.Conn
-
-	results map[string]messageChan
+	// Internal bits
+	transport clientTransport
+	results   map[string]messageChan
 }
 
 func NewClient(urlStr string) (*Client, error) {
@@ -77,34 +74,63 @@ func (c *Client) url() string {
 }
 
 func (c *Client) Connect() error {
-	conn, _, err := websocket.DefaultDialer.Dial(c.url(), nil)
-	if err != nil {
-		return err
+	if c.Mode == ClientModeAuto || c.Mode == ClientModeWebsocket {
+		c.transport = &websocketClientTransport{client: c}
+		err := c.transport.Connect(c.AuthData)
+		if err != nil {
+			if c.Mode == ClientModeAuto {
+				c.transport = newlongpollClientTransport(c)
+				err := c.transport.Connect(c.AuthData)
+				if err != nil {
+					return err
+				}
+			} else {
+				return err
+			}
+		}
+	} else if c.Mode == ClientModeLongPoll {
+		c.transport = newlongpollClientTransport(c)
+		err := c.transport.Connect(c.AuthData)
+		if err != nil {
+			return err
+		}
+	} else {
+		return fmt.Errorf("Unknown client mode: %d", c.Mode)
 	}
-
-	c.conn = conn
 
 	// Make sure we have a messages channel
 	if c.Messages == nil {
 		c.Messages = make(messageChan, 10)
 	}
 
-	// Authenticate
 	if !c.skip_auth {
-		err = c.send(AuthMessage, c.AuthData)
+		m, err := c.transport.Receive()
 		if err != nil {
 			return err
 		}
 
-		m, err := c.receive()
-		if err != nil {
-			return err
-		}
-
-		if m["type"] != AuthOKMessage {
-			return fmt.Errorf("Expected authOk, got %s instead", m["type"])
+		if m.Type() != AuthOKMessage {
+			return fmt.Errorf("Expected authOk, got %s instead", m.Type())
 		}
 	}
+	/*
+		// Authenticate
+		if !c.skip_auth {
+			err := c.send(AuthMessage, c.AuthData)
+			if err != nil {
+				return err
+			}
+
+			m, err := c.receive()
+			if err != nil {
+				return err
+			}
+
+			if m.Type() != AuthOKMessage {
+				return fmt.Errorf("Expected authOk, got %s instead", m.Type())
+			}
+		}
+	*/
 
 	go c.listen()
 
@@ -116,7 +142,7 @@ func (c *Client) Disconnect() error {
 	for _, r := range c.results {
 		close(r)
 	}
-	err := c.conn.Close()
+	err := c.transport.Close()
 	if err != nil && c.Error == nil {
 		c.Error = err
 	}
@@ -132,7 +158,7 @@ func (c *Client) listen() {
 			return
 		}
 
-		if m["type"] == MessageMessage {
+		if m.Type() == MessageMessage {
 			c.Messages <- m
 		} else {
 			channel, ok := c.results[m.ResultId()]
@@ -145,18 +171,16 @@ func (c *Client) listen() {
 	}
 }
 
-func (c *Client) send(msg string, data map[string]string) error {
+func (c *Client) send(msg string, data clientMessage) error {
 	if data == nil {
-		data = make(map[string]string)
+		data = make(clientMessage)
 	}
 	data["type"] = msg
-	return c.conn.WriteJSON(data)
+	return c.transport.Send(data)
 }
 
 func (c *Client) receive() (clientMessage, error) {
-	m := clientMessage{}
-	err := c.conn.ReadJSON(&m)
-	return m, err
+	return c.transport.Receive()
 }
 
 func (c *Client) resultChan(format string, args ...interface{}) chan clientMessage {
@@ -190,8 +214,8 @@ func (c *Client) Subscribe(channel string) error {
 		return err
 	}
 
-	if m["type"] != "subscribeOk" {
-		return fmt.Errorf("Expected subscribeOk, got %s instead", m["type"])
+	if m.Type() != SubscribeOKMessage {
+		return fmt.Errorf("Expected %s, got %s instead", SubscribeOKMessage, m.Type())
 	}
 	if m["channel"] != channel {
 		return fmt.Errorf("Expected channel %s, got %s instead", channel, m["channel"])
@@ -205,11 +229,18 @@ func (c *Client) Unsubscribe(channel string) error {
 		return err
 	}
 
-	if m["type"] != "unsubscribeOk" {
-		return fmt.Errorf("Expected subscribeOk, got %s instead", m["type"])
+	if m.Type() != UnsubscribeOKMessage {
+		return fmt.Errorf("Expected %s, got %s instead", UnsubscribeOKMessage, m.Type())
 	}
 	if m["channel"] != channel {
 		return fmt.Errorf("Expected channel %s, got %s instead", channel, m["channel"])
 	}
 	return nil
+}
+
+type clientTransport interface {
+	Connect(authData map[string]string) error
+	Close() error
+	Send(data clientMessage) error
+	Receive() (clientMessage, error)
 }

@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/garyburd/redigo/redis"
-	"github.com/gorilla/websocket"
 	"github.com/hydrogen18/stoppableListener"
 )
 
@@ -173,19 +172,6 @@ func sendMessage(channel, message string) error {
 	return err
 }
 
-type clientError struct {
-	Response   *http.Response
-	ProtoError error
-}
-
-func (e clientError) Error() string {
-	return e.ProtoError.Error()
-}
-
-type testWSClient struct {
-	Conn *websocket.Conn
-}
-
 func newWSClient(s *testServer, conf ...func(c *Client)) (*Client, error) {
 	url := fmt.Sprintf("http://localhost:%d/broadcaster/", s.Port)
 	client, err := NewClient(url)
@@ -193,6 +179,26 @@ func newWSClient(s *testServer, conf ...func(c *Client)) (*Client, error) {
 		return nil, err
 	}
 	client.Mode = ClientModeWebsocket
+
+	for _, v := range conf {
+		v(client)
+	}
+
+	err = client.Connect()
+	if err != nil {
+		return nil, err
+	}
+
+	return client, nil
+}
+
+func newLPClient(s *testServer, conf ...func(c *Client)) (*Client, error) {
+	url := fmt.Sprintf("http://localhost:%d/broadcaster/", s.Port)
+	client, err := NewClient(url)
+	if err != nil {
+		return nil, err
+	}
+	client.Mode = ClientModeLongPoll
 
 	for _, v := range conf {
 		v(client)

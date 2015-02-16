@@ -27,12 +27,15 @@ const (
 
 	// Server: Unsubscribe succeeded
 	UnsubscribeOKMessage = "unsubscribeOk"
+
+	// Client: Send me more messages
+	PollMessage = "poll"
 )
 
 type clientMessage map[string]string
 
 func (c clientMessage) ResultId() string {
-	t := c["type"]
+	t := c.Type()
 	if t == SubscribeOKMessage || t == SubscribeErrorMessage {
 		t = SubscribeMessage
 	}
@@ -40,4 +43,8 @@ func (c clientMessage) ResultId() string {
 		t = UnsubscribeMessage
 	}
 	return fmt.Sprintf("%s_%s", t, c["channel"])
+}
+
+func (c clientMessage) Type() string {
+	return c["type"]
 }
