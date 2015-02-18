@@ -33,6 +33,9 @@ const (
 
 	// Client: Send me more messages
 	PollMessage = "poll"
+
+	// Server: Unknown message
+	UnknownMessage = "unknown"
 )
 
 type clientMessage map[string]string

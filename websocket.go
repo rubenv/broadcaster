@@ -109,6 +109,9 @@ func (c *websocketConnection) handshake(w http.ResponseWriter, r *http.Request) 
 			})
 
 		default:
+			conn.WriteJSON(clientMessage{
+				"__type": UnknownMessage,
+			})
 			c.Close(400, "Unexpected message")
 			break
 		}

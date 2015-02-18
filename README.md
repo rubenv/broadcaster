@@ -31,6 +31,9 @@ const (
 	// Server: Authentication succeeded
 	AuthOKMessage = "authOk"
 
+	// Server: Authentication failed
+	AuthFailedMessage = "authFailed"
+
 	// Client: Subscribe to channel
 	SubscribeMessage = "subscribe"
 
@@ -51,6 +54,9 @@ const (
 
 	// Client: Send me more messages
 	PollMessage = "poll"
+
+	// Server: Unknown message
+	UnknownMessage = "unknown"
 )
 ```
 Message types used between server and client.

@@ -182,20 +182,17 @@ func testMessageTypes(t *testing.T, clientFn func(s *testServer, conf ...func(c 
 		t.Fatal(err)
 	}
 
-	_, err = client.receive()
-	if err == nil {
-		t.Fatal("Expected error!")
+	m, err := client.receive()
+	if err != nil {
+		t.Fatal(err)
 	}
-	if err.Error() != "websocket: close 400 Unexpected message" {
+	if m.Type() != UnknownMessage {
 		t.Fatal("Did not properly refuse message type")
 	}
 
 	stats, err := server.Broadcaster.Stats()
 	if err != nil {
 		t.Fatal(err)
-	}
-	if stats.Connections != 0 {
-		t.Errorf("Unexpected connection count: %d", stats.Connections)
 	}
 	if stats.localSubscriptions["test"] != 0 {
 		t.Errorf("Unexpected subscription count: %d", stats.localSubscriptions["test"])

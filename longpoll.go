@@ -72,7 +72,7 @@ func (c *longpollConnection) Handle(w http.ResponseWriter, r *http.Request, m cl
 			c.Reply(w, clientMessage{
 				"__type":  SubscribeErrorMessage,
 				"channel": channel,
-				"error":   "Channel refused",
+				"reason":  "Channel refused",
 			})
 			return
 		}
@@ -90,7 +90,7 @@ func (c *longpollConnection) Handle(w http.ResponseWriter, r *http.Request, m cl
 			c.Reply(w, clientMessage{
 				"__type":  SubscribeErrorMessage,
 				"channel": channel,
-				"error":   err.Error(),
+				"reason":  err.Error(),
 			})
 		} else {
 			c.Reply(w, clientMessage{
@@ -100,7 +100,9 @@ func (c *longpollConnection) Handle(w http.ResponseWriter, r *http.Request, m cl
 		}
 
 	default:
-		http.Error(w, "Unexpected message", 400)
+		c.Reply(w, clientMessage{
+			"__type": UnknownMessage,
+		})
 	}
 }
 
