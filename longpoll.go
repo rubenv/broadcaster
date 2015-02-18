@@ -91,6 +91,10 @@ func (t *longpollClientTransport) Connect(authData map[string]string) error {
 	}
 	data["__type"] = AuthMessage
 
+	if t.client.skip_auth {
+		data = clientMessage{}
+	}
+
 	return t.Send(data)
 }
 
