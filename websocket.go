@@ -31,18 +31,18 @@ func (c *websocketConnection) handshake(w http.ResponseWriter, r *http.Request) 
 	auth := clientMessage{}
 	err = conn.ReadJSON(&auth)
 	if err != nil || auth.Type() != AuthMessage {
-		conn.WriteJSON(clientMessage{"type": AuthFailedMessage, "reason": "Auth expected"})
+		conn.WriteJSON(clientMessage{"__type": AuthFailedMessage, "reason": "Auth expected"})
 		c.Close(401, "Auth expected")
 		return
 	}
 
 	if c.Server.CanConnect != nil && !c.Server.CanConnect(auth) {
-		conn.WriteJSON(clientMessage{"type": AuthFailedMessage, "reason": "Unauthorized"})
+		conn.WriteJSON(clientMessage{"__type": AuthFailedMessage, "reason": "Unauthorized"})
 		c.Close(401, "Unauthorized")
 		return
 	}
 
-	conn.WriteJSON(clientMessage{"type": AuthOKMessage})
+	conn.WriteJSON(clientMessage{"__type": AuthOKMessage})
 
 	hub := c.Server.hub
 	hub.NewClient <- c
@@ -78,13 +78,13 @@ func (c *websocketConnection) handshake(w http.ResponseWriter, r *http.Request) 
 			err := <-s.Done
 			if err != nil {
 				conn.WriteJSON(clientMessage{
-					"type":    SubscribeErrorMessage,
+					"__type":  SubscribeErrorMessage,
 					"channel": channel,
 					"error":   err.Error(),
 				})
 			} else {
 				conn.WriteJSON(clientMessage{
-					"type":    SubscribeOKMessage,
+					"__type":  SubscribeOKMessage,
 					"channel": channel,
 				})
 			}
@@ -100,7 +100,7 @@ func (c *websocketConnection) handshake(w http.ResponseWriter, r *http.Request) 
 
 			hub.Unsubscribe <- s
 			conn.WriteJSON(clientMessage{
-				"type":    UnsubscribeOKMessage,
+				"__type":  UnsubscribeOKMessage,
 				"channel": channel,
 			})
 
@@ -121,7 +121,7 @@ func (c *websocketConnection) Close(code uint16, msg string) {
 
 func (c *websocketConnection) Send(channel, message string) {
 	c.Conn.WriteJSON(clientMessage{
-		"type":    MessageMessage,
+		"__type":  MessageMessage,
 		"channel": channel,
 		"body":    message,
 	})
@@ -147,7 +147,7 @@ func (t *websocketClientTransport) Connect(authData map[string]string) error {
 		if data == nil {
 			data = make(map[string]string)
 		}
-		data["type"] = AuthMessage
+		data["__type"] = AuthMessage
 		err := t.Send(data)
 		if err != nil {
 			return err

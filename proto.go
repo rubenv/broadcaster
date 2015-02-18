@@ -49,7 +49,7 @@ func (c clientMessage) ResultId() string {
 }
 
 func (c clientMessage) Type() string {
-	return c["type"]
+	return c["__type"]
 }
 
 func (c clientMessage) Token() string {

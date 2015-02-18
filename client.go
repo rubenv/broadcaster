@@ -161,7 +161,7 @@ func (c *Client) send(msg string, data clientMessage) error {
 	if data == nil {
 		data = make(clientMessage)
 	}
-	data["type"] = msg
+	data["__type"] = msg
 	return c.transport.Send(data)
 }
 
