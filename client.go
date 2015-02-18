@@ -109,28 +109,12 @@ func (c *Client) Connect() error {
 			return err
 		}
 
-		if m.Type() != AuthOKMessage {
-			return fmt.Errorf("Expected authOk, got %s instead", m.Type())
+		if m.Type() == AuthFailedMessage {
+			return fmt.Errorf("Auth error: %s", m["reason"])
+		} else if m.Type() != AuthOKMessage {
+			return fmt.Errorf("Expected %s or %s, got %s instead", AuthOKMessage, AuthFailedMessage, m.Type())
 		}
 	}
-	/*
-		// Authenticate
-		if !c.skip_auth {
-			err := c.send(AuthMessage, c.AuthData)
-			if err != nil {
-				return err
-			}
-
-			m, err := c.receive()
-			if err != nil {
-				return err
-			}
-
-			if m.Type() != AuthOKMessage {
-				return fmt.Errorf("Expected authOk, got %s instead", m.Type())
-			}
-		}
-	*/
 
 	go c.listen()
 

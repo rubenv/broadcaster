@@ -31,11 +31,13 @@ func (c *websocketConnection) handshake(w http.ResponseWriter, r *http.Request) 
 	auth := clientMessage{}
 	err = conn.ReadJSON(&auth)
 	if err != nil || auth.Type() != AuthMessage {
+		conn.WriteJSON(clientMessage{"type": AuthFailedMessage, "reason": "Auth expected"})
 		c.Close(401, "Auth expected")
 		return
 	}
 
 	if c.Server.CanConnect != nil && !c.Server.CanConnect(auth) {
+		conn.WriteJSON(clientMessage{"type": AuthFailedMessage, "reason": "Unauthorized"})
 		c.Close(401, "Unauthorized")
 		return
 	}

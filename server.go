@@ -79,7 +79,7 @@ func (s *Server) handleLongPoll(w http.ResponseWriter, r *http.Request) {
 	if session == nil {
 		// New session
 		session, err := newLongpollConnection(w, r, m, s)
-		if err != nil {
+		if err == nil {
 			s.longpollSessions[session.Token] = session
 		}
 	} else {

@@ -22,3 +22,28 @@ func TestLPConnect(t *testing.T) {
 		t.Errorf("Unexpected connection count: %d", stats.Connections)
 	}
 }
+
+func TestLPCanConnect(t *testing.T) {
+	server, err := startServer(&Server{
+		CanConnect: func(data map[string]string) bool {
+			return false
+		},
+	}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer server.Stop()
+
+	_, err = newLPClient(server)
+	if err == nil || err.Error() != "Auth error: Unauthorized" {
+		t.Fatal("Did not properly deny access")
+	}
+
+	stats, err := server.Broadcaster.Stats()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stats.Connections != 0 {
+		t.Errorf("Unexpected connection count: %d", stats.Connections)
+	}
+}

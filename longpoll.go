@@ -31,12 +31,14 @@ func newLongpollConnection(w http.ResponseWriter, r *http.Request, m clientMessa
 func (c *longpollConnection) handshake(w http.ResponseWriter, r *http.Request, auth clientMessage) error {
 	// Expect auth packet first.
 	if auth.Type() != AuthMessage {
-		http.Error(w, "Auth expected", 401)
+		w.WriteHeader(401)
+		c.Reply(w, clientMessage{"type": AuthFailedMessage, "reason": "Auth expected"})
 		return errors.New("Auth expected")
 	}
 
 	if c.Server.CanConnect != nil && !c.Server.CanConnect(auth) {
-		http.Error(w, "Unauthorized", 401)
+		w.WriteHeader(401)
+		c.Reply(w, clientMessage{"type": AuthFailedMessage, "reason": "Unauthorized"})
 		return errors.New("Unauthorized")
 	}
 
@@ -48,6 +50,10 @@ func (c *longpollConnection) handshake(w http.ResponseWriter, r *http.Request, a
 	hub.NewClient <- c
 
 	return nil
+}
+
+func (c *longpollConnection) Reply(w http.ResponseWriter, m ...clientMessage) {
+	json.NewEncoder(w).Encode(m)
 }
 
 func (c *longpollConnection) Send(channel, message string) {
@@ -66,7 +72,7 @@ type longpollClientTransport struct {
 	client     *Client
 	messages   chan clientMessage
 	err        error
-	id         string
+	token      string
 	httpClient http.Client
 }
 
@@ -100,6 +106,8 @@ func (t *longpollClientTransport) Close() error {
 }
 
 func (t *longpollClientTransport) Send(data clientMessage) error {
+	data["token"] = t.token
+
 	buf, err := json.Marshal(data)
 	if err != nil {
 		return err
@@ -124,6 +132,9 @@ func (t *longpollClientTransport) Receive() (clientMessage, error) {
 	m, ok := <-t.messages
 	if !ok {
 		return nil, t.err
+	}
+	if m.Type() == AuthOKMessage {
+		t.token = m.Token()
 	}
 	return m, nil
 }

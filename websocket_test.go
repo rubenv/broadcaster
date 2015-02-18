@@ -38,7 +38,7 @@ func TestWSCanConnect(t *testing.T) {
 	if err == nil {
 		t.Fatal("Expected error!")
 	}
-	if err.Error() != "websocket: close 401 Unauthorized" {
+	if err.Error() != "Auth error: Unauthorized" {
 		t.Fatal("Did not properly deny access")
 	}
 
@@ -89,11 +89,11 @@ func TestWSRefusesUnauthedCommands(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = client.receive()
-	if err == nil {
-		t.Fatal("Expected error!")
+	m, err := client.receive()
+	if err != nil {
+		t.Fatal(err)
 	}
-	if err.Error() != "websocket: close 401 Auth expected" {
+	if m.Type() != AuthFailedMessage && m["reason"] != "Auth expected" {
 		t.Fatal("Did not properly deny access")
 	}
 

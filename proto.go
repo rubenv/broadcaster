@@ -10,6 +10,9 @@ const (
 	// Server: Authentication succeeded
 	AuthOKMessage = "authOk"
 
+	// Server: Authentication failed
+	AuthFailedMessage = "authFailed"
+
 	// Client: Subscribe to channel
 	SubscribeMessage = "subscribe"
 
