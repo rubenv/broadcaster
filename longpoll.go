@@ -91,13 +91,7 @@ func (t *longpollClientTransport) Connect(authData map[string]string) error {
 	}
 	data["type"] = AuthMessage
 
-	err := t.Send(data)
-	if err != nil {
-		return err
-	}
-
-	go t.poll()
-	return nil
+	return t.Send(data)
 }
 
 func (t *longpollClientTransport) Close() error {
@@ -106,7 +100,7 @@ func (t *longpollClientTransport) Close() error {
 }
 
 func (t *longpollClientTransport) Send(data clientMessage) error {
-	data["token"] = t.token
+	data["__token"] = t.token
 
 	buf, err := json.Marshal(data)
 	if err != nil {
@@ -137,6 +131,10 @@ func (t *longpollClientTransport) Receive() (clientMessage, error) {
 		t.token = m.Token()
 	}
 	return m, nil
+}
+
+func (t *longpollClientTransport) onConnect() {
+	go t.poll()
 }
 
 func (t *longpollClientTransport) poll() {

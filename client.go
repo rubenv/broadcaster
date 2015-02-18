@@ -134,6 +134,8 @@ func (c *Client) Disconnect() error {
 }
 
 func (c *Client) listen() {
+	c.transport.onConnect()
+
 	for {
 		m, err := c.receive()
 		if err != nil {
@@ -227,4 +229,6 @@ type clientTransport interface {
 	Close() error
 	Send(data clientMessage) error
 	Receive() (clientMessage, error)
+
+	onConnect()
 }

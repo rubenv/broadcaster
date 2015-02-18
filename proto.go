@@ -53,5 +53,5 @@ func (c clientMessage) Type() string {
 }
 
 func (c clientMessage) Token() string {
-	return c["token"]
+	return c["__token"]
 }

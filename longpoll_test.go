@@ -47,3 +47,22 @@ func TestLPCanConnect(t *testing.T) {
 		t.Errorf("Unexpected connection count: %d", stats.Connections)
 	}
 }
+
+func TestLPAuthData(t *testing.T) {
+	server, err := startServer(&Server{
+		CanConnect: func(data map[string]string) bool {
+			return data["token"] == "abcdefg"
+		},
+	}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer server.Stop()
+
+	_, err = newLPClient(server, func(c *Client) {
+		c.AuthData = map[string]string{"token": "abcdefg"}
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}

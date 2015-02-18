@@ -169,3 +169,6 @@ func (t *websocketClientTransport) Receive() (clientMessage, error) {
 	err := t.conn.ReadJSON(&m)
 	return m, err
 }
+
+func (t *websocketClientTransport) onConnect() {
+}
