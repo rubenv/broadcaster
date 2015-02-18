@@ -3,9 +3,65 @@ package broadcaster
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"net/http"
+
+	"code.google.com/p/go-uuid/uuid"
 )
 
+type longpollConnection struct {
+	Token  string
+	Server *Server
+}
+
+func newLongpollConnection(w http.ResponseWriter, r *http.Request, m clientMessage, s *Server) (*longpollConnection, error) {
+	conn := &longpollConnection{
+		Server: s,
+		Token:  uuid.New(),
+	}
+
+	err := conn.handshake(w, r, m)
+	if err != nil {
+		return nil, err
+	}
+
+	return conn, nil
+}
+
+func (c *longpollConnection) handshake(w http.ResponseWriter, r *http.Request, auth clientMessage) error {
+	// Expect auth packet first.
+	if auth.Type() != AuthMessage {
+		http.Error(w, "Auth expected", 401)
+		return errors.New("Auth expected")
+	}
+
+	if c.Server.CanConnect != nil && !c.Server.CanConnect(auth) {
+		http.Error(w, "Unauthorized", 401)
+		return errors.New("Unauthorized")
+	}
+
+	json.NewEncoder(w).Encode([]clientMessage{
+		clientMessage{"type": AuthOKMessage},
+	})
+
+	hub := c.Server.hub
+	hub.NewClient <- c
+
+	return nil
+}
+
+func (c *longpollConnection) Send(channel, message string) {
+}
+
+func (c *longpollConnection) Handle(w http.ResponseWriter, r *http.Request) {
+	json.NewEncoder(w).Encode([]clientMessage{
+		clientMessage{
+			"type": "fail",
+		},
+	})
+}
+
+// Client transport
 type longpollClientTransport struct {
 	client     *Client
 	messages   chan clientMessage

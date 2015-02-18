@@ -29,6 +29,8 @@ type Server struct {
 
 	hub      hub
 	prepared bool
+
+	longpollSessions map[string]*longpollConnection
 }
 
 type connection interface {
@@ -36,6 +38,8 @@ type connection interface {
 }
 
 func (s *Server) Prepare() error {
+	s.longpollSessions = make(map[string]*longpollConnection)
+
 	err := s.hub.Prepare(s.RedisHost, s.PubSubHost)
 	if err != nil {
 		return err
@@ -66,11 +70,22 @@ func (s *Server) handleWebsocket(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleLongPoll(w http.ResponseWriter, r *http.Request) {
-	json.NewEncoder(w).Encode([]clientMessage{
-		clientMessage{
-			"type": "fail",
-		},
-	})
+	m := clientMessage{}
+	json.NewDecoder(r.Body).Decode(&m)
+
+	token := m.Token()
+
+	session := s.longpollSessions[token]
+	if session == nil {
+		// New session
+		session, err := newLongpollConnection(w, r, m, s)
+		if err != nil {
+			s.longpollSessions[session.Token] = session
+		}
+	} else {
+		// Continue existing session
+		s.longpollSessions[token].Handle(w, r)
+	}
 }
 
 func (s *Server) Stats() (Stats, error) {

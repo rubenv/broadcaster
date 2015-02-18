@@ -48,3 +48,7 @@ func (c clientMessage) ResultId() string {
 func (c clientMessage) Type() string {
 	return c["type"]
 }
+
+func (c clientMessage) Token() string {
+	return c["token"]
+}

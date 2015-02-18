@@ -13,10 +13,10 @@ type websocketConnection struct {
 }
 
 func newWebsocketConnection(w http.ResponseWriter, r *http.Request, s *Server) {
-	client := &websocketConnection{
+	conn := &websocketConnection{
 		Server: s,
 	}
-	client.handshake(w, r)
+	conn.handshake(w, r)
 }
 
 func (c *websocketConnection) handshake(w http.ResponseWriter, r *http.Request) {
@@ -43,7 +43,6 @@ func (c *websocketConnection) handshake(w http.ResponseWriter, r *http.Request) 
 	conn.WriteJSON(clientMessage{"type": AuthOKMessage})
 
 	hub := c.Server.hub
-
 	hub.NewClient <- c
 
 	defer func() {
@@ -126,6 +125,7 @@ func (c *websocketConnection) Send(channel, message string) {
 	})
 }
 
+// Client transport
 type websocketClientTransport struct {
 	conn   *websocket.Conn
 	client *Client
