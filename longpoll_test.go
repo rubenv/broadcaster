@@ -34,10 +34,10 @@ func TestLPMessageTypes(t *testing.T) {
 func TestLPMessage(t *testing.T) {
 	testMessage(t, newLPClient)
 }
+*/
 
 func TestLPUnsubscribe(t *testing.T) {
 	testUnsubscribe(t, newLPClient)
 }
-*/
 
 // TODO: Test switching between servers, known tokens from other server should be accepted and transferred.

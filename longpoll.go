@@ -99,6 +99,21 @@ func (c *longpollConnection) Handle(w http.ResponseWriter, r *http.Request, m cl
 			})
 		}
 
+	case UnsubscribeMessage:
+		channel := m["channel"]
+
+		s := &subscription{
+			Client:  c,
+			Channel: channel,
+			Done:    make(chan error, 0),
+		}
+
+		hub.Unsubscribe <- s
+		c.Reply(w, clientMessage{
+			"__type":  UnsubscribeOKMessage,
+			"channel": channel,
+		})
+
 	default:
 		c.Reply(w, clientMessage{
 			"__type": UnknownMessage,
