@@ -76,6 +76,7 @@ func (s *Server) handleLongPoll(w http.ResponseWriter, r *http.Request) {
 	token := m.Token()
 
 	session := s.longpollSessions[token]
+	// TODO: Look for sessions in Redis if type == PollMessage
 	if session == nil {
 		// New session
 		session, err := newLongpollConnection(w, r, m, s)
@@ -84,7 +85,7 @@ func (s *Server) handleLongPoll(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		// Continue existing session
-		s.longpollSessions[token].Handle(w, r)
+		s.longpollSessions[token].Handle(w, r, m)
 	}
 }
 

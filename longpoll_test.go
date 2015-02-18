@@ -18,24 +18,26 @@ func TestLPRefusesUnauthedCommands(t *testing.T) {
 	testRefusesUnauthedCommands(t, newLPClient)
 }
 
+func TestLPSubscribe(t *testing.T) {
+	testSubscribe(t, newLPClient)
+}
+
 /*
-func TestWSSubscribe(t *testing.T) {
-	testSubscribe(t, newWSClient)
+func TestLPCanSubscribe(t *testing.T) {
+	testCanSubscribe(t, newLPClient)
 }
 
-func TestWSCanSubscribe(t *testing.T) {
-	testCanSubscribe(t, newWSClient)
+func TestLPMessageTypes(t *testing.T) {
+	testMessageTypes(t, newLPClient)
 }
 
-func TestWSMessageTypes(t *testing.T) {
-	testMessageTypes(t, newWSClient)
+func TestLPMessage(t *testing.T) {
+	testMessage(t, newLPClient)
 }
 
-func TestWSMessage(t *testing.T) {
-	testMessage(t, newWSClient)
-}
-
-func TestWSUnsubscribe(t *testing.T) {
-	testUnsubscribe(t, newWSClient)
+func TestLPUnsubscribe(t *testing.T) {
+	testUnsubscribe(t, newLPClient)
 }
 */
+
+// TODO: Test switching between servers, known tokens from other server should be accepted and transferred.

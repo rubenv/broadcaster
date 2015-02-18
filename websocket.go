@@ -63,7 +63,11 @@ func (c *websocketConnection) handshake(w http.ResponseWriter, r *http.Request) 
 		case SubscribeMessage:
 			channel := m["channel"]
 			if c.Server.CanSubscribe != nil && !c.Server.CanSubscribe(auth, channel) {
-				c.Close(403, "Channel refused")
+				conn.WriteJSON(clientMessage{
+					"__type":  SubscribeErrorMessage,
+					"channel": channel,
+					"reason":  "Channel refused",
+				})
 				continue
 			}
 
@@ -80,7 +84,7 @@ func (c *websocketConnection) handshake(w http.ResponseWriter, r *http.Request) 
 				conn.WriteJSON(clientMessage{
 					"__type":  SubscribeErrorMessage,
 					"channel": channel,
-					"error":   err.Error(),
+					"reason":  err.Error(),
 				})
 			} else {
 				conn.WriteJSON(clientMessage{

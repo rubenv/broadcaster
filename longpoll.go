@@ -10,8 +10,9 @@ import (
 )
 
 type longpollConnection struct {
-	Token  string
-	Server *Server
+	Token    string
+	Server   *Server
+	AuthData clientMessage
 }
 
 func newLongpollConnection(w http.ResponseWriter, r *http.Request, m clientMessage, s *Server) (*longpollConnection, error) {
@@ -43,8 +44,10 @@ func (c *longpollConnection) handshake(w http.ResponseWriter, r *http.Request, a
 	}
 
 	json.NewEncoder(w).Encode([]clientMessage{
-		clientMessage{"__type": AuthOKMessage},
+		clientMessage{"__type": AuthOKMessage, "__token": c.Token},
 	})
+
+	c.AuthData = auth
 
 	hub := c.Server.hub
 	hub.NewClient <- c
@@ -59,12 +62,46 @@ func (c *longpollConnection) Reply(w http.ResponseWriter, m ...clientMessage) {
 func (c *longpollConnection) Send(channel, message string) {
 }
 
-func (c *longpollConnection) Handle(w http.ResponseWriter, r *http.Request) {
-	json.NewEncoder(w).Encode([]clientMessage{
-		clientMessage{
-			"__type": "fail",
-		},
-	})
+func (c *longpollConnection) Handle(w http.ResponseWriter, r *http.Request, m clientMessage) {
+	hub := c.Server.hub
+
+	switch m.Type() {
+	case SubscribeMessage:
+		channel := m["channel"]
+		if c.Server.CanSubscribe != nil && !c.Server.CanSubscribe(c.AuthData, channel) {
+			c.Reply(w, clientMessage{
+				"__type":  SubscribeErrorMessage,
+				"channel": channel,
+				"error":   "Channel refused",
+			})
+			return
+		}
+
+		s := &subscription{
+			Client:  c,
+			Channel: channel,
+			Done:    make(chan error, 0),
+		}
+
+		hub.Subscribe <- s
+
+		err := <-s.Done
+		if err != nil {
+			c.Reply(w, clientMessage{
+				"__type":  SubscribeErrorMessage,
+				"channel": channel,
+				"error":   err.Error(),
+			})
+		} else {
+			c.Reply(w, clientMessage{
+				"__type":  SubscribeOKMessage,
+				"channel": channel,
+			})
+		}
+
+	default:
+		http.Error(w, "Unexpected message", 400)
+	}
 }
 
 // Client transport

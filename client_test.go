@@ -152,17 +152,13 @@ func testCanSubscribe(t *testing.T, clientFn func(s *testServer, conf ...func(c 
 	if err == nil {
 		t.Fatal("Expected error!")
 	}
-	if err.Error() != "websocket: close 403 Channel refused" {
+	if err.Error() != "Subscribe error: Channel refused" {
 		t.Fatal("Did not properly deny access")
 	}
 
 	stats, err := server.Broadcaster.Stats()
 	if err != nil {
 		t.Fatal(err)
-	}
-	if stats.Connections != 0 {
-		// Should disconnect bad client
-		t.Errorf("Unexpected connection count: %d", stats.Connections)
 	}
 	if stats.localSubscriptions["test"] != 0 {
 		t.Errorf("Unexpected subscription count: %d", stats.localSubscriptions["test"])

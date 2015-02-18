@@ -200,9 +200,12 @@ func (c *Client) Subscribe(channel string) error {
 		return err
 	}
 
-	if m.Type() != SubscribeOKMessage {
-		return fmt.Errorf("Expected %s, got %s instead", SubscribeOKMessage, m.Type())
+	if m.Type() == SubscribeErrorMessage {
+		return fmt.Errorf("Subscribe error: %s", m["reason"])
+	} else if m.Type() != SubscribeOKMessage {
+		return fmt.Errorf("Expected %s or %s, got %s instead", SubscribeOKMessage, SubscribeErrorMessage, m.Type())
 	}
+
 	if m["channel"] != channel {
 		return fmt.Errorf("Expected channel %s, got %s instead", channel, m["channel"])
 	}
