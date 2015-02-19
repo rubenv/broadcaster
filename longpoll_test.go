@@ -34,8 +34,9 @@ func TestLPMessage(t *testing.T) {
 	testMessage(t, newLPClient)
 }
 
-/*func TestLPUnsubscribe(t *testing.T) {
+func TestLPUnsubscribe(t *testing.T) {
 	testUnsubscribe(t, newLPClient)
-}*/
+}
 
 // TODO: Test switching between servers, known tokens from other server should be accepted and transferred.
+// TODO: Keep listening after longpoll disconnect, until transferred to different request.

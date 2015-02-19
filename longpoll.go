@@ -86,25 +86,18 @@ func handleLongpollConnection(w http.ResponseWriter, r *http.Request, s *Server)
 
 			longpollReply(w, newChannelMessage(SubscribeOKMessage, channel))
 
+		case UnsubscribeMessage:
+			channel := m["channel"]
+			err := redis.LongpollUnsubscribe(m.Token(), channel)
+			if err != nil {
+				longpollReply(w, newChannelErrorMessage(UnsubscribeErrorMessage, channel, err))
+				return nil
+			}
+
+			longpollReply(w, newChannelMessage(UnsubscribeOKMessage, channel))
+
 		default:
 			longpollReply(w, newMessage(UnknownMessage))
-			/*
-				case UnsubscribeMessage:
-					channel := m["channel"]
-
-					s := &subscription{
-						Client:  c,
-						Channel: channel,
-						Done:    make(chan error, 0),
-					}
-
-					hub.Unsubscribe <- s
-					c.Reply(w, clientMessage{
-						"__type":  UnsubscribeOKMessage,
-						"channel": channel,
-					})
-
-			*/
 		}
 	}
 

@@ -174,6 +174,23 @@ func (b *redisBackend) LongpollSubscribe(token, channel string) error {
 	return nil
 }
 
+// Records channel unsubscription and broadcasts it to listeners
+func (b *redisBackend) LongpollUnsubscribe(token, channel string) error {
+	conn := b.conn.Get()
+	defer conn.Close()
+
+	key := b.key("channels:%s", token)
+	conn.Send("MULTI")
+	conn.Send("HDEL", key, channel)
+	conn.Send("PUBLISH", b.controlChannel, fmt.Sprintf("unsubscribe %s %s", token, channel))
+	_, err := conn.Do("EXEC")
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (b *redisBackend) LongpollGetChannels(token string) ([]string, error) {
 	conn := b.conn.Get()
 	defer conn.Close()
