@@ -3,7 +3,6 @@ package broadcaster
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"net/http"
 
 	"code.google.com/p/go-uuid/uuid"
@@ -130,13 +129,13 @@ func (c *longpollConnection) handshake(w http.ResponseWriter, r *http.Request, a
 	if auth.Type() != AuthMessage {
 		w.WriteHeader(401)
 		longpollReply(w, clientMessage{"__type": AuthFailedMessage, "reason": "Auth expected"})
-		return errors.New("Auth expected")
+		return nil
 	}
 
 	if c.Server.CanConnect != nil && !c.Server.CanConnect(auth) {
 		w.WriteHeader(401)
 		longpollReply(w, clientMessage{"__type": AuthFailedMessage, "reason": "Unauthorized"})
-		return errors.New("Unauthorized")
+		return nil
 	}
 
 	// Store session

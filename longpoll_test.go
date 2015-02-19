@@ -6,7 +6,7 @@ func TestLPConnect(t *testing.T) {
 	testConnect(t, newLPClient)
 }
 
-/*func TestLPCanConnect(t *testing.T) {
+func TestLPCanConnect(t *testing.T) {
 	testCanConnect(t, newLPClient)
 }
 
@@ -18,6 +18,7 @@ func TestLPRefusesUnauthedCommands(t *testing.T) {
 	testRefusesUnauthedCommands(t, newLPClient)
 }
 
+/*
 func TestLPSubscribe(t *testing.T) {
 	testSubscribe(t, newLPClient)
 }
@@ -28,7 +29,8 @@ func TestLPCanSubscribe(t *testing.T) {
 
 func TestLPMessageTypes(t *testing.T) {
 	testMessageTypes(t, newLPClient)
-}*/
+}
+*/
 
 /*
 func TestLPMessage(t *testing.T) {
