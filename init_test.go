@@ -172,6 +172,15 @@ func sendMessage(channel, message string) error {
 	return err
 }
 
+func newTestRedisBackend() *redisBackend {
+	u := fmt.Sprintf("localhost:%d", redisPort)
+	b, err := newRedisBackend(u, u, "broadcaster", "bc:", 1*time.Second)
+	if err != nil {
+		panic(err)
+	}
+	return b
+}
+
 func newWSClient(s *testServer, conf ...func(c *Client)) (*Client, error) {
 	url := fmt.Sprintf("http://localhost:%d/broadcaster/", s.Port)
 	client, err := NewClient(url)
@@ -192,6 +201,7 @@ func newWSClient(s *testServer, conf ...func(c *Client)) (*Client, error) {
 	return client, nil
 }
 
+/*
 func newLPClient(s *testServer, conf ...func(c *Client)) (*Client, error) {
 	url := fmt.Sprintf("http://localhost:%d/broadcaster/", s.Port)
 	client, err := NewClient(url)
@@ -211,3 +221,4 @@ func newLPClient(s *testServer, conf ...func(c *Client)) (*Client, error) {
 
 	return client, nil
 }
+*/

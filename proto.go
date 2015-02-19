@@ -31,11 +31,17 @@ const (
 	// Server: Unsubscribe succeeded
 	UnsubscribeOKMessage = "unsubscribeOk"
 
+	// Server: Unsubscribe failed
+	UnsubscribeErrorMessage = "unsubscribeError"
+
 	// Client: Send me more messages
 	PollMessage = "poll"
 
 	// Server: Unknown message
 	UnknownMessage = "unknown"
+
+	// Server: Server error
+	ServerErrorMessage = "serverError"
 )
 
 type clientMessage map[string]string

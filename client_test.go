@@ -127,8 +127,8 @@ func testSubscribe(t *testing.T, clientFn func(s *testServer, conf ...func(c *Cl
 	if stats.Connections != 1 {
 		t.Errorf("Unexpected connection count: %d", stats.Connections)
 	}
-	if stats.localSubscriptions["test"] != 1 {
-		t.Errorf("Unexpected subscription count: %d", stats.localSubscriptions["test"])
+	if stats.LocalSubscriptions["test"] != 1 {
+		t.Errorf("Unexpected subscription count: %d", stats.LocalSubscriptions["test"])
 	}
 }
 
@@ -160,8 +160,8 @@ func testCanSubscribe(t *testing.T, clientFn func(s *testServer, conf ...func(c 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if stats.localSubscriptions["test"] != 0 {
-		t.Errorf("Unexpected subscription count: %d", stats.localSubscriptions["test"])
+	if stats.LocalSubscriptions["test"] != 0 {
+		t.Errorf("Unexpected subscription count: %d", stats.LocalSubscriptions["test"])
 	}
 }
 
@@ -194,8 +194,8 @@ func testMessageTypes(t *testing.T, clientFn func(s *testServer, conf ...func(c 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if stats.localSubscriptions["test"] != 0 {
-		t.Errorf("Unexpected subscription count: %d", stats.localSubscriptions["test"])
+	if stats.LocalSubscriptions["test"] != 0 {
+		t.Errorf("Unexpected subscription count: %d", stats.LocalSubscriptions["test"])
 	}
 }
 
@@ -266,7 +266,7 @@ func testUnsubscribe(t *testing.T, clientFn func(s *testServer, conf ...func(c *
 	if stats.Connections != 1 {
 		t.Errorf("Unexpected connection count: %d", stats.Connections)
 	}
-	if stats.localSubscriptions["test"] != 0 {
-		t.Errorf("Unexpected subscription count: %d", stats.localSubscriptions["test"])
+	if stats.LocalSubscriptions["test"] != 0 {
+		t.Errorf("Unexpected subscription count: %d", stats.LocalSubscriptions["test"])
 	}
 }

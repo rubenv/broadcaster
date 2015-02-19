@@ -78,22 +78,26 @@ func (c *Client) Connect() error {
 		c.transport = &websocketClientTransport{client: c}
 		err := c.transport.Connect(c.AuthData)
 		if err != nil {
-			if c.Mode == ClientModeAuto {
-				c.transport = newlongpollClientTransport(c)
-				err := c.transport.Connect(c.AuthData)
-				if err != nil {
+			/*
+				if c.Mode == ClientModeAuto {
+					c.transport = newlongpollClientTransport(c)
+					err := c.transport.Connect(c.AuthData)
+					if err != nil {
+						return err
+					}
+				} else {
 					return err
 				}
-			} else {
-				return err
-			}
+			*/
 		}
 	} else if c.Mode == ClientModeLongPoll {
-		c.transport = newlongpollClientTransport(c)
-		err := c.transport.Connect(c.AuthData)
-		if err != nil {
-			return err
-		}
+		/*
+			c.transport = newlongpollClientTransport(c)
+			err := c.transport.Connect(c.AuthData)
+			if err != nil {
+				return err
+			}
+		*/
 	} else {
 		return fmt.Errorf("Unknown client mode: %d", c.Mode)
 	}

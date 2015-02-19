@@ -1,8 +1,8 @@
 package broadcaster
 
 import (
-	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -24,23 +24,54 @@ type Server struct {
 	// Redis host, used for data, defaults to localhost:6379
 	RedisHost string
 
+	// Redis pubsub channel, used for internal coordination messages
+	// Defaults to "broadcaster"
+	ControlChannel string
+
+	// Namespace for storing session data.
+	// Defaults to "bc:"
+	ControlNamespace string
+
 	// PubSub host, used for pubsub, defaults to RedisHost
 	PubSubHost string
 
-	hub      hub
+	// Timeout for long-polling connections
+	Timeout time.Duration
+
+	redis    *redisBackend
+	hub      *hub
 	prepared bool
-
-	longpollSessions map[string]*longpollConnection
-}
-
-type connection interface {
-	Send(channel, message string)
 }
 
 func (s *Server) Prepare() error {
-	s.longpollSessions = make(map[string]*longpollConnection)
+	// Defaults
+	if s.RedisHost == "" {
+		s.RedisHost = "localhost:6379"
+	}
+	if s.PubSubHost == "" {
+		s.PubSubHost = s.RedisHost
+	}
+	if s.ControlChannel == "" {
+		s.ControlChannel = "broadcaster"
+	}
+	if s.ControlNamespace == "" {
+		s.ControlNamespace = "bc:"
+	}
+	if s.Timeout == 0 {
+		s.Timeout = 30 * time.Second
+	}
 
-	err := s.hub.Prepare(s.RedisHost, s.PubSubHost)
+	redis, err := newRedisBackend(s.RedisHost, s.PubSubHost, s.ControlChannel, s.ControlNamespace, s.Timeout)
+	if err != nil {
+		return err
+	}
+	s.redis = redis
+
+	s.hub = &hub{
+		redis: redis,
+	}
+
+	err = s.hub.Prepare()
 	if err != nil {
 		return err
 	}
@@ -70,23 +101,33 @@ func (s *Server) handleWebsocket(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleLongPoll(w http.ResponseWriter, r *http.Request) {
-	m := clientMessage{}
-	json.NewDecoder(r.Body).Decode(&m)
-
-	token := m.Token()
-
-	session := s.longpollSessions[token]
-	// TODO: Look for sessions in Redis if type == PollMessage
-	if session == nil {
-		// New session
-		session, err := newLongpollConnection(w, r, m, s)
-		if err == nil {
-			s.longpollSessions[session.Token] = session
+	/*
+		err := handleLongpollConnection(w, r, s)
+		if err != nil {
+			http.Error(w, err.Error(), 500)
 		}
-	} else {
-		// Continue existing session
-		s.longpollSessions[token].Handle(w, r, m)
-	}
+	*/
+	/*
+
+		token := m.Token()
+
+		session, _, err := s.hub.GetLongpollSession(token)
+		if err != nil {
+			http.Error(w, "Cannot fetch session", 500)
+		}
+
+		// TODO: Look for sessions in Redis if type == PollMessage
+		if session == nil {
+			// New session
+			session, err := newLongpollConnection(w, r, m, s)
+			if err == nil {
+				s.longpollSessions[session.Token] = session
+			}
+		} else {
+			// Continue existing session
+			s.longpollSessions[token].Handle(w, r, m)
+		}
+	*/
 }
 
 func (s *Server) Stats() (Stats, error) {

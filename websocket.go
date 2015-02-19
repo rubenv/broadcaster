@@ -45,12 +45,21 @@ func (c *websocketConnection) handshake(w http.ResponseWriter, r *http.Request) 
 	conn.WriteJSON(clientMessage{"__type": AuthOKMessage})
 
 	hub := c.Server.hub
-	hub.NewClient <- c
+	err = hub.Connect(c)
+	if err != nil {
+		conn.WriteJSON(clientMessage{"__type": ServerErrorMessage})
+		conn.Close()
+		return
+	}
 
 	defer func() {
-		hub.ClientDisconnect <- c
+		err := hub.Disconnect(c)
+		if err != nil {
+			conn.WriteJSON(clientMessage{"__type": ServerErrorMessage})
+		}
 		conn.Close()
 	}()
+
 	m := clientMessage{}
 	for {
 		err := conn.ReadJSON(&m)
@@ -71,15 +80,7 @@ func (c *websocketConnection) handshake(w http.ResponseWriter, r *http.Request) 
 				continue
 			}
 
-			s := &subscription{
-				Client:  c,
-				Channel: channel,
-				Done:    make(chan error, 0),
-			}
-
-			hub.Subscribe <- s
-
-			err := <-s.Done
+			err := hub.Subscribe(c, channel)
 			if err != nil {
 				conn.WriteJSON(clientMessage{
 					"__type":  SubscribeErrorMessage,
@@ -96,13 +97,14 @@ func (c *websocketConnection) handshake(w http.ResponseWriter, r *http.Request) 
 		case UnsubscribeMessage:
 			channel := m["channel"]
 
-			s := &subscription{
-				Client:  c,
-				Channel: channel,
-				Done:    make(chan error, 0),
+			err := hub.Unsubscribe(c, channel)
+			if err != nil {
+				conn.WriteJSON(clientMessage{
+					"__type":  UnsubscribeErrorMessage,
+					"channel": channel,
+					"reason":  err.Error(),
+				})
 			}
-
-			hub.Unsubscribe <- s
 			conn.WriteJSON(clientMessage{
 				"__type":  UnsubscribeOKMessage,
 				"channel": channel,
