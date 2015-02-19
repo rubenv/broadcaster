@@ -11,7 +11,7 @@ type redisBackend struct {
 	conn           redis.Conn
 	pubSub         redis.PubSubConn
 	prefix         string
-	timeout        time.Duration
+	timeout        int
 	controlChannel string
 
 	Messages chan redis.Message
@@ -41,7 +41,7 @@ func newRedisBackend(redisHost, pubsubHost, controlChannel, prefix string, timeo
 		conn:           r,
 		pubSub:         pubSub,
 		prefix:         prefix,
-		timeout:        timeout,
+		timeout:        int(timeout.Seconds()) + 1,
 		controlChannel: controlChannel,
 		Messages:       make(chan redis.Message, 250),
 	}

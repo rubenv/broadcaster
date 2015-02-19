@@ -206,7 +206,6 @@ func newWSClient(s *testServer, conf ...func(c *Client)) (*Client, error) {
 	return client, nil
 }
 
-/*
 func newLPClient(s *testServer, conf ...func(c *Client)) (*Client, error) {
 	url := fmt.Sprintf("http://localhost:%d/broadcaster/", s.Port)
 	client, err := NewClient(url)
@@ -226,4 +225,3 @@ func newLPClient(s *testServer, conf ...func(c *Client)) (*Client, error) {
 
 	return client, nil
 }
-*/

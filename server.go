@@ -101,12 +101,10 @@ func (s *Server) handleWebsocket(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleLongPoll(w http.ResponseWriter, r *http.Request) {
-	/*
-		err := handleLongpollConnection(w, r, s)
-		if err != nil {
-			http.Error(w, err.Error(), 500)
-		}
-	*/
+	err := handleLongpollConnection(w, r, s)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+	}
 
 	/*
 
