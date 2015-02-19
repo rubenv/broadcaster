@@ -13,9 +13,6 @@ type testConnection struct {
 }
 
 func (t *testConnection) Send(channel, message string) {
-	if t.Messages == nil {
-		t.Messages = make(chan string, 1)
-	}
 	t.Messages <- fmt.Sprintf("%s - %s", channel, message)
 }
 
@@ -167,7 +164,9 @@ func TestHubMessage(t *testing.T) {
 	go hub.Run()
 	defer hub.Stop()
 
-	conn := &testConnection{}
+	conn := &testConnection{
+		Messages: make(chan string, 10),
+	}
 
 	err = hub.Connect(conn)
 	if err != nil {

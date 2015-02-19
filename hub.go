@@ -7,10 +7,6 @@ import (
 	"github.com/garyburd/redigo/redis"
 )
 
-/*const (
-	controlSubscribe = "subscribe"
-)*/
-
 type connection interface {
 	Send(channel, message string)
 }
