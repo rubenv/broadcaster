@@ -52,11 +52,17 @@ const (
 	// Server: Unsubscribe succeeded
 	UnsubscribeOKMessage = "unsubscribeOk"
 
+	// Server: Unsubscribe failed
+	UnsubscribeErrorMessage = "unsubscribeError"
+
 	// Client: Send me more messages
 	PollMessage = "poll"
 
 	// Server: Unknown message
 	UnknownMessage = "unknown"
+
+	// Server: Server error
+	ServerErrorMessage = "serverError"
 )
 ```
 Message types used between server and client.
@@ -75,6 +81,9 @@ type Client struct {
 
 	// Incoming messages
 	Messages chan clientMessage
+
+	// Timeout
+	Timeout time.Duration
 }
 ```
 
@@ -144,8 +153,22 @@ type Server struct {
 	// Redis host, used for data, defaults to localhost:6379
 	RedisHost string
 
+	// Redis pubsub channel, used for internal coordination messages
+	// Defaults to "broadcaster"
+	ControlChannel string
+
+	// Namespace for storing session data.
+	// Defaults to "bc:"
+	ControlNamespace string
+
 	// PubSub host, used for pubsub, defaults to RedisHost
 	PubSubHost string
+
+	// Timeout for long-polling connections
+	Timeout time.Duration
+
+	// Combine long poll message for given duration (more latency, less load)
+	PollTime time.Duration
 }
 ```
 
@@ -177,10 +200,11 @@ func (s *Server) Stats() (Stats, error)
 type Stats struct {
 	// Number of active connections
 	Connections int
+
+	// For debugging purposes only
+	LocalSubscriptions map[string]int
 }
 ```
-
-Server statistics
 
 ## License
 
