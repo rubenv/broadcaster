@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"math/rand"
 	"net/http"
+	"strconv"
 	"time"
 
 	"code.google.com/p/go-uuid/uuid"
@@ -55,7 +56,7 @@ func handleLongpollConnection(w http.ResponseWriter, r *http.Request, s *Server)
 	}
 
 	if m.Type() == PollMessage {
-		messages, err := conn.poll()
+		messages, err := conn.poll(m["seq"])
 		if err != nil {
 			return err
 		}
@@ -129,7 +130,7 @@ func (c *longpollConnection) handshake(w http.ResponseWriter, r *http.Request, a
 	return nil
 }
 
-func (c *longpollConnection) poll() ([]clientMessage, error) {
+func (c *longpollConnection) poll(seq string) ([]clientMessage, error) {
 	redis := c.Server.redis
 	err := redis.LongpollPing(c.Token)
 	if err != nil {
@@ -213,6 +214,7 @@ type longpollClientTransport struct {
 	err        error
 	token      string
 	httpClient http.Client
+	call       int
 }
 
 func newlongpollClientTransport(c *Client) *longpollClientTransport {
@@ -286,7 +288,9 @@ func (t *longpollClientTransport) poll() {
 	data := clientMessage{
 		"__type":  PollMessage,
 		"__token": t.token,
+		"seq":     strconv.Itoa(t.call),
 	}
+	t.call++
 
 	buf, _ := json.Marshal(data)
 
