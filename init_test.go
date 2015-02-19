@@ -143,6 +143,7 @@ func (s *testServer) Start() error {
 	}
 
 	s.Broadcaster.RedisHost = fmt.Sprintf("localhost:%d", redisPort)
+	s.Broadcaster.PollTime = 100 * time.Millisecond
 
 	err = s.Broadcaster.Prepare()
 	if err != nil {

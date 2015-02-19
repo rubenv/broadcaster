@@ -223,6 +223,10 @@ func testMessage(t *testing.T, clientFn func(s *testServer, conf ...func(c *Clie
 		t.Fatal(err)
 	}
 
+	// Wait until polling socket is connected. There can be a small gap between
+	// connecting and listening while long-polling.
+	<-time.After(100 * time.Millisecond)
+
 	err = sendMessage("test", "Test message")
 	if err != nil {
 		t.Fatal(err)

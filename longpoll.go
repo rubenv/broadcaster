@@ -298,14 +298,19 @@ func (t *longpollClientTransport) poll() {
 	buf, _ := json.Marshal(data)
 
 	for t.running {
-
 		url := t.client.url()
 		resp, err := t.httpClient.Post(url, "application/json", bytes.NewBuffer(buf))
-		if err != nil {
+		if err != nil || resp.StatusCode != 200 {
 			// Random backoff
 			<-time.After(time.Duration(rand.Int63n(int64(t.client.Timeout / 2))))
 			continue
 		}
 		defer resp.Body.Close()
+
+		result := []clientMessage{}
+		json.NewDecoder(resp.Body).Decode(&result)
+		for _, v := range result {
+			t.messages <- v
+		}
 	}
 }

@@ -30,11 +30,9 @@ func TestLPMessageTypes(t *testing.T) {
 	testMessageTypes(t, newLPClient)
 }
 
-/*
 func TestLPMessage(t *testing.T) {
 	testMessage(t, newLPClient)
 }
-*/
 
 /*func TestLPUnsubscribe(t *testing.T) {
 	testUnsubscribe(t, newLPClient)
