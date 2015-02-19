@@ -2,7 +2,6 @@ package broadcaster
 
 import (
 	"fmt"
-	"log"
 	"math/rand"
 	"net"
 	"net/http"
@@ -158,8 +157,7 @@ func (s *testServer) Start() error {
 	go func() {
 		s.wg.Add(1)
 		defer s.wg.Done()
-		err := s.HTTPServer.Serve(s.Listener)
-		log.Print(err)
+		s.HTTPServer.Serve(s.Listener)
 	}()
 
 	return nil

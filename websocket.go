@@ -153,6 +153,14 @@ func (c *websocketConnection) Send(channel, message string) {
 	c.Conn.WriteJSON(newBroadcastMessage(channel, message))
 }
 
+func (c *websocketConnection) Process(t string, args []string) {
+	panic("Websocket connections don't use control messages!")
+}
+
+func (c *websocketConnection) GetToken() string {
+	return c.Token
+}
+
 // Client transport
 type websocketClientTransport struct {
 	conn   *websocket.Conn

@@ -38,6 +38,9 @@ type Server struct {
 	// Timeout for long-polling connections
 	Timeout time.Duration
 
+	// Combine long poll message for given duration (more latency, less load)
+	PollTime time.Duration
+
 	redis    *redisBackend
 	hub      *hub
 	prepared bool
@@ -59,6 +62,9 @@ func (s *Server) Prepare() error {
 	}
 	if s.Timeout == 0 {
 		s.Timeout = 30 * time.Second
+	}
+	if s.PollTime == 0 {
+		s.PollTime = 2 * time.Second
 	}
 
 	redis, err := newRedisBackend(s.RedisHost, s.PubSubHost, s.ControlChannel, s.ControlNamespace, s.Timeout)
@@ -105,28 +111,6 @@ func (s *Server) handleLongPoll(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 	}
-
-	/*
-
-		token := m.Token()
-
-		session, _, err := s.hub.GetLongpollSession(token)
-		if err != nil {
-			http.Error(w, "Cannot fetch session", 500)
-		}
-
-		// TODO: Look for sessions in Redis if type == PollMessage
-		if session == nil {
-			// New session
-			session, err := newLongpollConnection(w, r, m, s)
-			if err == nil {
-				s.longpollSessions[session.Token] = session
-			}
-		} else {
-			// Continue existing session
-			s.longpollSessions[token].Handle(w, r, m)
-		}
-	*/
 }
 
 type Stats struct {

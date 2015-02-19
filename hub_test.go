@@ -16,6 +16,13 @@ func (t *testConnection) Send(channel, message string) {
 	t.Messages <- fmt.Sprintf("%s - %s", channel, message)
 }
 
+func (c *testConnection) Process(t string, args []string) {
+}
+
+func (c *testConnection) GetToken() string {
+	return "test"
+}
+
 func TestHubConnectDisconnect(t *testing.T) {
 	hub := &hub{
 		redis: newTestRedisBackend(),

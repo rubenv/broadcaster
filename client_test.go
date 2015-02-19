@@ -1,6 +1,9 @@
 package broadcaster
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func testConnect(t *testing.T, clientFn func(s *testServer, conf ...func(c *Client)) (*Client, error)) {
 	server, err := startServer(nil, 0)
@@ -119,6 +122,10 @@ func testSubscribe(t *testing.T, clientFn func(s *testServer, conf ...func(c *Cl
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	// Wait until polling socket is connected. This makes sure that the local
+	// subscription count is correct.
+	<-time.After(100 * time.Millisecond)
 
 	stats, err := server.Broadcaster.Stats()
 	if err != nil {

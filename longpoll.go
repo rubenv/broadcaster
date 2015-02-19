@@ -3,7 +3,9 @@ package broadcaster
 import (
 	"bytes"
 	"encoding/json"
+	"math/rand"
 	"net/http"
+	"time"
 
 	"code.google.com/p/go-uuid/uuid"
 )
@@ -12,13 +14,19 @@ type longpollConnection struct {
 	Token    string
 	Server   *Server
 	AuthData clientMessage
+
+	combining bool
+	messages  chan clientMessage
+	deadline  <-chan time.Time
+
+	subscribe   chan string
+	unsubscribe chan string
 }
 
 func handleLongpollConnection(w http.ResponseWriter, r *http.Request, s *Server) error {
 	m := clientMessage{}
 	json.NewDecoder(r.Body).Decode(&m)
 
-	//hub := s.hub
 	redis := s.redis
 
 	token := m.Token()
@@ -38,16 +46,21 @@ func handleLongpollConnection(w http.ResponseWriter, r *http.Request, s *Server)
 			AuthData: m,
 		}
 		return conn.handshake(w, r, m)
-	} else if m.Type() == PollMessage {
-		// TODO
+	}
+
+	// Existing connection
+	conn := &longpollConnection{
+		Server: s,
+		Token:  m.Token(),
+	}
+
+	if m.Type() == PollMessage {
+		messages, err := conn.poll()
+		if err != nil {
+			return err
+		}
+		longpollReply(w, messages...)
 	} else {
-
-		/*conn := &longpollConnection{
-			Server:   s,
-			Token:    uuid.New(),
-			AuthData: m,
-		}*/
-
 		switch m.Type() {
 		case SubscribeMessage:
 			auth, err := redis.GetSession(m.Token())
@@ -65,37 +78,13 @@ func handleLongpollConnection(w http.ResponseWriter, r *http.Request, s *Server)
 				return nil
 			}
 
-			/*s := &longpollSubscription{
-				Token:   m.Token(),
-				Channel: channel,
+			err = redis.LongpollSubscribe(m.Token(), channel)
+			if err != nil {
+				longpollReply(w, newChannelErrorMessage(SubscribeErrorMessage, channel, err))
+				return nil
 			}
 
-			hub.LongpollSubscribe <- s*/
-			longpollReply(w)
-
-			/*
-				s := &subscription{
-					Client:  c,
-					Channel: channel,
-					Done:    make(chan error, 0),
-				}
-
-				hub.Subscribe <- s
-
-				err := <-s.Done
-				if err != nil {
-					c.Reply(w, clientMessage{
-						"__type":  SubscribeErrorMessage,
-						"channel": channel,
-						"reason":  err.Error(),
-					})
-				} else {
-					c.Reply(w, clientMessage{
-						"__type":  SubscribeOKMessage,
-						"channel": channel,
-					})
-				}
-			*/
+			longpollReply(w, newChannelMessage(SubscribeOKMessage, channel))
 
 			/*
 				case UnsubscribeMessage:
@@ -149,20 +138,85 @@ func (c *longpollConnection) handshake(w http.ResponseWriter, r *http.Request, a
 	return nil
 }
 
+func (c *longpollConnection) poll() ([]clientMessage, error) {
+	redis := c.Server.redis
+	err := redis.LongpollPing(c.Token)
+	if err != nil {
+		return nil, err
+	}
+
+	c.deadline = time.After(c.Server.Timeout - c.Server.PollTime)
+	c.messages = make(chan clientMessage, 10)
+	c.subscribe = make(chan string, 1)
+	c.unsubscribe = make(chan string, 1)
+
+	hub := c.Server.hub
+
+	err = hub.Connect(c)
+	if err != nil {
+		return nil, err
+	}
+	defer hub.Disconnect(c)
+
+	channels, err := redis.LongpollGetChannels(c.Token)
+	if err != nil {
+		return nil, err
+	}
+	for _, channel := range channels {
+		err := hub.Subscribe(c, channel)
+		if err != nil {
+			return nil, err
+		}
+		defer hub.Unsubscribe(c, channel)
+	}
+
+	messages := []clientMessage{}
+
+loop:
+	for {
+		select {
+		case <-c.deadline:
+			break loop
+		case channel := <-c.subscribe:
+			hub.Subscribe(c, channel)
+		case channel := <-c.unsubscribe:
+			hub.Unsubscribe(c, channel)
+		case m := <-c.messages:
+			messages = append(messages, m)
+		}
+	}
+
+	return messages, nil
+}
+
 func longpollReply(w http.ResponseWriter, m ...clientMessage) {
 	json.NewEncoder(w).Encode(m)
 }
 
 func (c *longpollConnection) Send(channel, message string) {
+	if !c.combining {
+		c.deadline = time.After(c.Server.PollTime)
+		c.combining = true
+	}
+	c.messages <- newBroadcastMessage(channel, message)
 }
 
-func (c *longpollConnection) Handle(w http.ResponseWriter, r *http.Request, m clientMessage) {
-	//hub := c.Server.hub
+func (c *longpollConnection) Process(t string, args []string) {
+	switch t {
+	case "subscribe":
+		c.subscribe <- args[0]
+	case "unsubscribe":
+		c.unsubscribe <- args[0]
+	}
+}
 
+func (c *longpollConnection) GetToken() string {
+	return c.Token
 }
 
 // Client transport
 type longpollClientTransport struct {
+	running    bool
 	client     *Client
 	messages   chan clientMessage
 	err        error
@@ -193,6 +247,7 @@ func (t *longpollClientTransport) Connect(authData map[string]string) error {
 }
 
 func (t *longpollClientTransport) Close() error {
+	t.running = false
 	close(t.messages)
 	return nil
 }
@@ -232,9 +287,27 @@ func (t *longpollClientTransport) Receive() (clientMessage, error) {
 }
 
 func (t *longpollClientTransport) onConnect() {
+	t.running = true
 	go t.poll()
 }
 
 func (t *longpollClientTransport) poll() {
-	// TODO: Keep polling for messages.
+	data := clientMessage{
+		"__type":  PollMessage,
+		"__token": t.token,
+	}
+
+	buf, _ := json.Marshal(data)
+
+	for t.running {
+
+		url := t.client.url()
+		resp, err := t.httpClient.Post(url, "application/json", bytes.NewBuffer(buf))
+		if err != nil {
+			// Random backoff
+			<-time.After(time.Duration(rand.Int63n(int64(t.client.Timeout / 2))))
+			continue
+		}
+		defer resp.Body.Close()
+	}
 }

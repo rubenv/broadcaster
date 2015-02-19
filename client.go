@@ -3,6 +3,7 @@ package broadcaster
 import (
 	"fmt"
 	"net/url"
+	"time"
 )
 
 // Client connection mode.
@@ -29,6 +30,9 @@ type Client struct {
 	// Incoming messages
 	Messages chan clientMessage
 
+	// Timeout
+	Timeout time.Duration
+
 	// Connection params
 	host   string
 	path   string
@@ -49,9 +53,10 @@ func NewClient(urlStr string) (*Client, error) {
 	}
 
 	return &Client{
-		host:   u.Host,
-		path:   u.Path,
-		secure: u.Scheme == "https",
+		host:    u.Host,
+		path:    u.Path,
+		secure:  u.Scheme == "https",
+		Timeout: 30 * time.Second,
 	}, nil
 }
 

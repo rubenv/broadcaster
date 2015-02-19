@@ -18,11 +18,11 @@ func TestLPRefusesUnauthedCommands(t *testing.T) {
 	testRefusesUnauthedCommands(t, newLPClient)
 }
 
-/*
 func TestLPSubscribe(t *testing.T) {
 	testSubscribe(t, newLPClient)
 }
 
+/*
 func TestLPCanSubscribe(t *testing.T) {
 	testCanSubscribe(t, newLPClient)
 }

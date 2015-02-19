@@ -3,12 +3,15 @@ package broadcaster
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/garyburd/redigo/redis"
 )
 
 type connection interface {
 	Send(channel, message string)
+	Process(t string, args []string)
+	GetToken() string
 }
 
 type subscriptionRequest struct {
@@ -28,6 +31,9 @@ type hub struct {
 	// Allows mapping channels to subscribers.
 	channels map[string]map[connection]bool
 
+	// Makes tokens to connections
+	connections map[string]connection
+
 	newSubscriptions   chan subscriptionRequest
 	newUnsubscriptions chan subscriptionRequest
 }
@@ -37,6 +43,7 @@ func (h *hub) Prepare() error {
 
 	h.subscriptions = make(map[connection]map[string]bool)
 	h.channels = make(map[string]map[connection]bool)
+	h.connections = make(map[string]connection)
 
 	h.newSubscriptions = make(chan subscriptionRequest, 100)
 	h.newUnsubscriptions = make(chan subscriptionRequest, 100)
@@ -65,6 +72,7 @@ func (h *hub) Stop() {
 
 func (h *hub) Connect(conn connection) error {
 	h.subscriptions[conn] = make(map[string]bool)
+	h.connections[conn.GetToken()] = conn
 	return nil
 }
 
@@ -82,6 +90,7 @@ func (h *hub) Disconnect(conn connection) error {
 	}
 
 	delete(h.subscriptions, conn)
+	delete(h.connections, conn.GetToken())
 	return nil
 }
 
@@ -151,13 +160,29 @@ func (h *hub) handleUnsubscribe(r subscriptionRequest) {
 	r.Done <- nil
 }
 
-func (h *hub) handleMessage(m redis.Message) {
-	if _, ok := h.channels[m.Channel]; !ok {
-		return // No longer subscribed?
+func (h *hub) processClient(t, token string, args []string) {
+	if c, ok := h.connections[token]; ok {
+		c.Process(t, args)
 	}
+}
 
-	for conn, _ := range h.channels[m.Channel] {
-		conn.Send(m.Channel, string(m.Data))
+func (h *hub) handleMessage(m redis.Message) {
+	if m.Channel == h.redis.controlChannel {
+		args := strings.Split(string(m.Data), " ")
+		switch args[0] {
+		case "subscribe":
+			h.processClient(args[0], args[1], args[2:])
+		case "unsubscribe":
+			h.processClient(args[0], args[1], args[2:])
+		}
+	} else {
+		if _, ok := h.channels[m.Channel]; !ok {
+			return // No longer subscribed?
+		}
+
+		for conn, _ := range h.channels[m.Channel] {
+			conn.Send(m.Channel, string(m.Data))
+		}
 	}
 }
 
