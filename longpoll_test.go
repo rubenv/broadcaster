@@ -22,7 +22,6 @@ func TestLPSubscribe(t *testing.T) {
 	testSubscribe(t, newLPClient)
 }
 
-/*
 func TestLPCanSubscribe(t *testing.T) {
 	testCanSubscribe(t, newLPClient)
 }
@@ -30,7 +29,6 @@ func TestLPCanSubscribe(t *testing.T) {
 func TestLPMessageTypes(t *testing.T) {
 	testMessageTypes(t, newLPClient)
 }
-*/
 
 /*
 func TestLPMessage(t *testing.T) {

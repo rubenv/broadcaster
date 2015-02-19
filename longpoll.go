@@ -86,6 +86,8 @@ func handleLongpollConnection(w http.ResponseWriter, r *http.Request, s *Server)
 
 			longpollReply(w, newChannelMessage(SubscribeOKMessage, channel))
 
+		default:
+			longpollReply(w, newMessage(UnknownMessage))
 			/*
 				case UnsubscribeMessage:
 					channel := m["channel"]
@@ -102,10 +104,6 @@ func handleLongpollConnection(w http.ResponseWriter, r *http.Request, s *Server)
 						"channel": channel,
 					})
 
-				default:
-					c.Reply(w, clientMessage{
-						"__type": UnknownMessage,
-					})
 			*/
 		}
 	}
