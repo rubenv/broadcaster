@@ -107,6 +107,7 @@ func (s *Server) handleLongPoll(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), 500)
 		}
 	*/
+
 	/*
 
 		token := m.Token()
@@ -130,6 +131,29 @@ func (s *Server) handleLongPoll(w http.ResponseWriter, r *http.Request) {
 	*/
 }
 
+type Stats struct {
+	// Number of active connections
+	Connections int
+
+	// For debugging purposes only
+	LocalSubscriptions map[string]int
+}
+
 func (s *Server) Stats() (Stats, error) {
-	return s.hub.Stats()
+	hubStats, err := s.hub.Stats()
+	if err != nil {
+		return Stats{}, err
+	}
+
+	connected, err := s.redis.GetConnected()
+	if err != nil {
+		return Stats{}, err
+	}
+
+	stats := Stats{
+		Connections:        connected,
+		LocalSubscriptions: hubStats.LocalSubscriptions,
+	}
+
+	return stats, nil
 }

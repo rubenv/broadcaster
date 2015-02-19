@@ -36,12 +36,8 @@ func TestHubConnectDisconnect(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	stats, err := hub.Stats()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if stats.Connections != 1 {
-		t.Errorf("Expected 1 connection, got %d", stats.Connections)
+	if len(hub.subscriptions) != 1 {
+		t.Errorf("Expected 1 connection, got %d", len(hub.subscriptions))
 	}
 
 	err = hub.Disconnect(conn)
@@ -49,12 +45,8 @@ func TestHubConnectDisconnect(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	stats, err = hub.Stats()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if stats.Connections != 0 {
-		t.Errorf("Expected 0 connections, got %d", stats.Connections)
+	if len(hub.subscriptions) != 0 {
+		t.Errorf("Expected 0 connections, got %d", len(hub.subscriptions))
 	}
 }
 

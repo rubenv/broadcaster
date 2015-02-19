@@ -64,3 +64,39 @@ func (c clientMessage) Type() string {
 func (c clientMessage) Token() string {
 	return c["__token"]
 }
+
+func newMessage(t string) clientMessage {
+	return clientMessage{
+		"__type": t,
+	}
+}
+
+func newErrorMessage(t string, err error) clientMessage {
+	return clientMessage{
+		"__type": t,
+		"reason": err.Error(),
+	}
+}
+
+func newChannelMessage(t, channel string) clientMessage {
+	return clientMessage{
+		"__type":  t,
+		"channel": channel,
+	}
+}
+
+func newBroadcastMessage(channel, body string) clientMessage {
+	return clientMessage{
+		"__type":  MessageMessage,
+		"channel": channel,
+		"body":    body,
+	}
+}
+
+func newChannelErrorMessage(t, channel string, err error) clientMessage {
+	return clientMessage{
+		"__type":  t,
+		"channel": channel,
+		"reason":  err.Error(),
+	}
+}

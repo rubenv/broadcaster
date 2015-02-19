@@ -106,6 +106,11 @@ type testServer struct {
 }
 
 func startServer(s *Server, port int) (*testServer, error) {
+	_, err := redisClient.Do("FLUSHALL")
+	if err != nil {
+		return nil, err
+	}
+
 	if port == 0 {
 		// Fixed seed to reproducably get random ports
 		port = 25000 + portSource.Intn(1000)
@@ -114,7 +119,7 @@ func startServer(s *Server, port int) (*testServer, error) {
 		Port:        port,
 		Broadcaster: s,
 	}
-	err := server.Start()
+	err = server.Start()
 	if err != nil {
 		return nil, err
 	}

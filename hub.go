@@ -161,22 +161,17 @@ func (h *hub) handleMessage(m redis.Message) {
 	}
 }
 
-func (h *hub) Stats() (Stats, error) {
+type hubStats struct {
+	LocalSubscriptions map[string]int
+}
+
+func (h *hub) Stats() (hubStats, error) {
 	subscriptions := make(map[string]int)
 	for k, v := range h.channels {
 		subscriptions[k] = len(v)
 	}
 
-	return Stats{
-		Connections:        len(h.subscriptions),
+	return hubStats{
 		LocalSubscriptions: subscriptions,
 	}, nil
-}
-
-type Stats struct {
-	// Number of active connections
-	Connections int
-
-	// For debugging purposes only
-	LocalSubscriptions map[string]int
 }

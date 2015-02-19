@@ -2,63 +2,88 @@ package broadcaster
 
 import (
 	"encoding/binary"
+	"errors"
 	"net/http"
+
+	"code.google.com/p/go-uuid/uuid"
 
 	"github.com/gorilla/websocket"
 )
 
 type websocketConnection struct {
-	Conn   *websocket.Conn
-	Server *Server
+	Token    string
+	Conn     *websocket.Conn
+	Server   *Server
+	AuthData clientMessage
 }
 
 func newWebsocketConnection(w http.ResponseWriter, r *http.Request, s *Server) {
 	conn := &websocketConnection{
 		Server: s,
+		Token:  uuid.New(),
 	}
-	conn.handshake(w, r)
+	err := conn.handshake(w, r)
+	if err != nil {
+		if conn.Conn != nil {
+			conn.Conn.WriteJSON(newErrorMessage(ServerErrorMessage, err))
+			conn.Conn.Close()
+		} else {
+			http.Error(w, err.Error(), 500)
+		}
+	}
 }
 
-func (c *websocketConnection) handshake(w http.ResponseWriter, r *http.Request) {
+func (c *websocketConnection) handshake(w http.ResponseWriter, r *http.Request) error {
 	conn, err := c.Server.Upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		http.Error(w, err.Error(), 400)
-		return
+		return nil
 	}
 	c.Conn = conn
 
 	// Expect auth packet first.
-	auth := clientMessage{}
-	err = conn.ReadJSON(&auth)
-	if err != nil || auth.Type() != AuthMessage {
-		conn.WriteJSON(clientMessage{"__type": AuthFailedMessage, "reason": "Auth expected"})
+	err = conn.ReadJSON(&c.AuthData)
+	if err != nil || c.AuthData.Type() != AuthMessage {
+		conn.WriteJSON(newErrorMessage(AuthFailedMessage, errors.New("Auth expected")))
 		c.Close(401, "Auth expected")
-		return
+		return nil
 	}
 
-	if c.Server.CanConnect != nil && !c.Server.CanConnect(auth) {
-		conn.WriteJSON(clientMessage{"__type": AuthFailedMessage, "reason": "Unauthorized"})
+	if c.Server.CanConnect != nil && !c.Server.CanConnect(c.AuthData) {
+		conn.WriteJSON(newErrorMessage(AuthFailedMessage, errors.New("Unauthorized")))
 		c.Close(401, "Unauthorized")
-		return
+		return nil
 	}
 
-	conn.WriteJSON(clientMessage{"__type": AuthOKMessage})
+	redis := c.Server.redis
+	err = redis.StoreSession(c.Token, c.AuthData)
+	if err != nil {
+		return err
+		conn.WriteJSON(newMessage(ServerErrorMessage))
+		conn.Close()
+	}
+
+	defer c.Cleanup()
+
+	err = conn.WriteJSON(newMessage(AuthOKMessage))
+	if err != nil {
+		return err
+	}
 
 	hub := c.Server.hub
 	err = hub.Connect(c)
 	if err != nil {
-		conn.WriteJSON(clientMessage{"__type": ServerErrorMessage})
-		conn.Close()
-		return
+		return err
 	}
 
-	defer func() {
-		err := hub.Disconnect(c)
-		if err != nil {
-			conn.WriteJSON(clientMessage{"__type": ServerErrorMessage})
-		}
-		conn.Close()
-	}()
+	c.Run()
+
+	return nil
+}
+
+func (c *websocketConnection) Run() {
+	conn := c.Conn
+	hub := c.Server.hub
 
 	m := clientMessage{}
 	for {
@@ -71,27 +96,16 @@ func (c *websocketConnection) handshake(w http.ResponseWriter, r *http.Request) 
 		switch m.Type() {
 		case SubscribeMessage:
 			channel := m["channel"]
-			if c.Server.CanSubscribe != nil && !c.Server.CanSubscribe(auth, channel) {
-				conn.WriteJSON(clientMessage{
-					"__type":  SubscribeErrorMessage,
-					"channel": channel,
-					"reason":  "Channel refused",
-				})
+			if c.Server.CanSubscribe != nil && !c.Server.CanSubscribe(c.AuthData, channel) {
+				conn.WriteJSON(newChannelErrorMessage(SubscribeErrorMessage, channel, errors.New("Channel refused")))
 				continue
 			}
 
 			err := hub.Subscribe(c, channel)
 			if err != nil {
-				conn.WriteJSON(clientMessage{
-					"__type":  SubscribeErrorMessage,
-					"channel": channel,
-					"reason":  err.Error(),
-				})
+				conn.WriteJSON(newChannelErrorMessage(SubscribeErrorMessage, channel, err))
 			} else {
-				conn.WriteJSON(clientMessage{
-					"__type":  SubscribeOKMessage,
-					"channel": channel,
-				})
+				conn.WriteJSON(newChannelMessage(SubscribeOKMessage, channel))
 			}
 
 		case UnsubscribeMessage:
@@ -99,25 +113,32 @@ func (c *websocketConnection) handshake(w http.ResponseWriter, r *http.Request) 
 
 			err := hub.Unsubscribe(c, channel)
 			if err != nil {
-				conn.WriteJSON(clientMessage{
-					"__type":  UnsubscribeErrorMessage,
-					"channel": channel,
-					"reason":  err.Error(),
-				})
+				conn.WriteJSON(newChannelErrorMessage(UnsubscribeErrorMessage, channel, err))
 			}
-			conn.WriteJSON(clientMessage{
-				"__type":  UnsubscribeOKMessage,
-				"channel": channel,
-			})
+			conn.WriteJSON(newChannelMessage(UnsubscribeOKMessage, channel))
 
 		default:
-			conn.WriteJSON(clientMessage{
-				"__type": UnknownMessage,
-			})
-			c.Close(400, "Unexpected message")
+			conn.WriteJSON(newMessage(UnknownMessage))
 			break
 		}
 	}
+}
+
+func (c *websocketConnection) Cleanup() {
+	redis := c.Server.redis
+	hub := c.Server.hub
+
+	err := redis.DeleteSession(c.Token)
+	if err != nil {
+		c.Conn.WriteJSON(newErrorMessage(ServerErrorMessage, err))
+	}
+
+	err = hub.Disconnect(c)
+	if err != nil {
+		c.Conn.WriteJSON(newErrorMessage(ServerErrorMessage, err))
+	}
+
+	c.Conn.Close()
 }
 
 func (c *websocketConnection) Close(code uint16, msg string) {
@@ -129,11 +150,7 @@ func (c *websocketConnection) Close(code uint16, msg string) {
 }
 
 func (c *websocketConnection) Send(channel, message string) {
-	c.Conn.WriteJSON(clientMessage{
-		"__type":  MessageMessage,
-		"channel": channel,
-		"body":    message,
-	})
+	c.Conn.WriteJSON(newBroadcastMessage(channel, message))
 }
 
 // Client transport

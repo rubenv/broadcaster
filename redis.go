@@ -71,6 +71,19 @@ func (b *redisBackend) key(name string) string {
 	return b.prefix + name
 }
 
+func (b *redisBackend) GetConnected() (int, error) {
+	c, err := b.conn.Do("GET", b.key("connected"))
+	if err != nil {
+		return 0, err
+	}
+
+	r, err := redis.Int(c, err)
+	if err != nil && err != redis.ErrNil {
+		return 0, err
+	}
+	return r, nil
+}
+
 func (b *redisBackend) StoreSession(token string, auth clientMessage) error {
 	// No need to store these
 	delete(auth, "__token")
@@ -79,13 +92,32 @@ func (b *redisBackend) StoreSession(token string, auth clientMessage) error {
 	if err != nil {
 		return err
 	}
-	_, err = b.conn.Do("SETEX", b.key("sess:"+token), b.timeout, string(data))
+	b.conn.Send("MULTI")
+	b.conn.Send("SETEX", b.key("sess:"+token), b.timeout, string(data))
+	b.conn.Send("INCR", b.key("connected"))
+	_, err = b.conn.Do("EXEC")
+	return err
+}
+
+func (b *redisBackend) DeleteSession(token string) error {
+	b.conn.Send("MULTI")
+	b.conn.Send("DEL", b.key("sess:"+token))
+	b.conn.Send("DECR", b.key("connected"))
+	_, err := b.conn.Do("EXEC")
 	return err
 }
 
 func (b *redisBackend) GetSession(token string) (clientMessage, error) {
 	// TODO
 	return nil, nil
+}
+
+func (b *redisBackend) IsConnected(token string) (bool, error) {
+	r, err := b.conn.Do("EXISTS", b.key("sess:"+token))
+	if err != nil {
+		return false, err
+	}
+	return r.(int64) == 1, nil
 }
 
 func (b *redisBackend) Subscribe(channel string) error {
