@@ -34,6 +34,10 @@ func TestLPMessage(t *testing.T) {
 	testMessage(t, newLPClient)
 }
 
+func TestLPMessageChannel(t *testing.T) {
+	testMessageChannel(t, newLPClient)
+}
+
 func TestLPUnsubscribe(t *testing.T) {
 	testUnsubscribe(t, newLPClient)
 }

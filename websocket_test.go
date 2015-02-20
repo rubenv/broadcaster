@@ -34,6 +34,10 @@ func TestWSMessage(t *testing.T) {
 	testMessage(t, newWSClient)
 }
 
+func TestWSMessageChannel(t *testing.T) {
+	testMessageChannel(t, newWSClient)
+}
+
 func TestWSUnsubscribe(t *testing.T) {
 	testUnsubscribe(t, newWSClient)
 }

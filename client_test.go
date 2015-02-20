@@ -260,6 +260,49 @@ func testMessage(t *testing.T, clientFn func(s *testServer, conf ...func(c *Clie
 	}
 }
 
+func testMessageChannel(t *testing.T, clientFn func(s *testServer, conf ...func(c *Client)) (*Client, error)) {
+	server, err := startServer(nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer server.Stop()
+
+	client, err := clientFn(server)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = client.Subscribe("test")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Wait until polling socket is connected. There can be a small gap between
+	// connecting and listening while long-polling.
+	<-time.After(100 * time.Millisecond)
+
+	err = sendMessage("other", "Test message")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = sendMessage("test", "Test message")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	m := <-client.Messages
+	if m.Type() != "message" || m["channel"] != "test" || m["body"] != "Test message" {
+		t.Error("Wrong message payload")
+	}
+
+	select {
+	case <-client.Messages:
+		t.Error("Unexpected message")
+	default:
+	}
+}
+
 func testUnsubscribe(t *testing.T, clientFn func(s *testServer, conf ...func(c *Client)) (*Client, error)) {
 	server, err := startServer(nil, 0)
 	if err != nil {
