@@ -286,7 +286,7 @@ func (t *longpollClientTransport) Send(data clientMessage) error {
 		return err
 	}
 
-	url := t.client.url()
+	url := t.client.url(ClientModeLongPoll)
 	resp, err := t.httpClient.Post(url, "application/json", bytes.NewBuffer(buf))
 	if err != nil {
 		return err
@@ -328,7 +328,7 @@ func (t *longpollClientTransport) poll() {
 	buf, _ := json.Marshal(data)
 
 	for t.running {
-		url := t.client.url()
+		url := t.client.url(ClientModeLongPoll)
 		resp, err := t.httpClient.Post(url, "application/json", bytes.NewBuffer(buf))
 		if err != nil || resp.StatusCode != 200 {
 			// Random backoff

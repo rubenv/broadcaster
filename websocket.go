@@ -168,7 +168,7 @@ type websocketClientTransport struct {
 }
 
 func (t *websocketClientTransport) Connect(authData map[string]string) error {
-	conn, _, err := websocket.DefaultDialer.Dial(t.client.url(), nil)
+	conn, _, err := websocket.DefaultDialer.Dial(t.client.url(ClientModeWebsocket), nil)
 	if err != nil {
 		return err
 	}

@@ -60,17 +60,13 @@ func NewClient(urlStr string) (*Client, error) {
 	}, nil
 }
 
-func (c *Client) url() string {
+func (c *Client) url(mode ClientMode) string {
 	scheme := "ws"
-
-	mode := c.Mode
-	if mode == ClientModeAuto {
-		mode = ClientModeWebsocket
-	}
 
 	if mode == ClientModeLongPoll {
 		scheme = "http"
 	}
+
 	if c.secure {
 		scheme += "s"
 	}
