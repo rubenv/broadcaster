@@ -170,6 +170,8 @@ func (h *hub) handleMessage(m redis.Message) {
 	if m.Channel == h.redis.controlChannel {
 		args := strings.Split(string(m.Data), " ")
 		switch args[0] {
+		case "transfer":
+			h.processClient(args[0], args[1], args[2:])
 		case "subscribe":
 			h.processClient(args[0], args[1], args[2:])
 		case "unsubscribe":

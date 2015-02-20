@@ -246,6 +246,18 @@ func testMessage(t *testing.T, clientFn func(s *testServer, conf ...func(c *Clie
 	if m.Type() != "message" || m["channel"] != "test" || m["body"] != "Test message 2" {
 		t.Error("Wrong message payload")
 	}
+
+	// Wait until next polling interval (tests follow-up connections)
+	<-time.After(100 * time.Millisecond)
+	err = sendMessage("test", "Test message 3")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	m = <-client.Messages
+	if m.Type() != "message" || m["channel"] != "test" || m["body"] != "Test message 3" {
+		t.Error("Wrong message payload")
+	}
 }
 
 func testUnsubscribe(t *testing.T, clientFn func(s *testServer, conf ...func(c *Client)) (*Client, error)) {

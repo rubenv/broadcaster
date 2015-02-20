@@ -208,13 +208,73 @@ func (b *redisBackend) LongpollPing(token string) error {
 	conn := b.conn.Get()
 	defer conn.Close()
 
+	// Use double expire time: the initial waiting time of the request +
+	// allowed lingering time.
 	conn.Send("MULTI")
-	conn.Send("EXPIRE", b.key("channels:%s", token), b.timeout)
-	conn.Send("EXPIRE", b.key("sess:%s", token), b.timeout)
+	conn.Send("EXPIRE", b.key("channels:%s", token), b.timeout*2)
+	conn.Send("EXPIRE", b.key("sess:%s", token), b.timeout*2)
 	_, err := conn.Do("EXEC")
 	if err != nil {
 		return err
 	}
 
 	return nil
+}
+
+func (b *redisBackend) LongpollBacklog(token string, m clientMessage) error {
+	conn := b.conn.Get()
+	defer conn.Close()
+
+	// No need to store type
+	delete(m, "__type")
+	data, err := json.Marshal(m)
+	if err != nil {
+		return err
+	}
+
+	key := b.key("backlog:%s", token)
+	conn.Send("MULTI")
+	conn.Send("RPUSH", key, data)
+	conn.Send("EXPIRE", key, b.timeout)
+	_, err = conn.Do("EXEC")
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (b *redisBackend) LongpollTransfer(token string, seq string) error {
+	conn := b.conn.Get()
+	defer conn.Close()
+
+	_, err := conn.Do("PUBLISH", b.controlChannel, fmt.Sprintf("transfer %s %s", token, seq))
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (b *redisBackend) LongpollGetBacklog(token string, result chan clientMessage) {
+	conn := b.conn.Get()
+	defer conn.Close()
+
+	key := b.key("backlog:%s", token)
+	for {
+		s, err := redis.Bytes(conn.Do("LPOP", key))
+		if err != nil {
+			return
+		}
+
+		data := clientMessage{}
+		err = json.Unmarshal(s, &data)
+		if err != nil {
+			return
+		}
+
+		data["__type"] = MessageMessage
+
+		result <- data
+	}
 }

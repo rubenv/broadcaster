@@ -22,6 +22,7 @@ type longpollConnection struct {
 
 	subscribe   chan string
 	unsubscribe chan string
+	transfer    chan string
 }
 
 func handleLongpollConnection(w http.ResponseWriter, r *http.Request, s *Server) error {
@@ -56,11 +57,7 @@ func handleLongpollConnection(w http.ResponseWriter, r *http.Request, s *Server)
 	}
 
 	if m.Type() == PollMessage {
-		messages, err := conn.poll(m["seq"])
-		if err != nil {
-			return err
-		}
-		longpollReply(w, messages...)
+		return conn.poll(w, m["seq"])
 	} else {
 		switch m.Type() {
 		case SubscribeMessage:
@@ -130,55 +127,89 @@ func (c *longpollConnection) handshake(w http.ResponseWriter, r *http.Request, a
 	return nil
 }
 
-func (c *longpollConnection) poll(seq string) ([]clientMessage, error) {
+func (c *longpollConnection) poll(w http.ResponseWriter, seq string) error {
 	redis := c.Server.redis
 	err := redis.LongpollPing(c.Token)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	c.deadline = time.After(c.Server.Timeout - c.Server.PollTime)
 	c.messages = make(chan clientMessage, 10)
 	c.subscribe = make(chan string, 1)
 	c.unsubscribe = make(chan string, 1)
+	c.transfer = make(chan string, 1)
 
 	hub := c.Server.hub
 
 	err = hub.Connect(c)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer hub.Disconnect(c)
 
+	// Resubscribe to all the channels that are tracked by this connection.
 	channels, err := redis.LongpollGetChannels(c.Token)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	for _, channel := range channels {
 		err := hub.Subscribe(c, channel)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		defer hub.Unsubscribe(c, channel)
 	}
 
-	messages := []clientMessage{}
+	// Kill other listeners
+	go redis.LongpollTransfer(c.Token, seq)
 
-loop:
+	// Ensure we broadcast the backlog
+	go redis.LongpollGetBacklog(c.Token, c.messages)
+
+	// Wait until we either time-out or until the message deadline hits.
+	// The initial deadline is configured to the polling Timeout length.
+	// Once the first message comes in, this is shortened to PollTime.
+	//
+	// Also handles notifications of (un)subscription which may have happend
+	// while waiting.
+	messages := []clientMessage{}
+	c.listen(seq, func(m clientMessage) {
+		messages = append(messages, m)
+	})
+	longpollReply(w, messages...)
+
+	go func() {
+		// Listens for new messages until a new client connects. This ensures we
+		// don't lose any messages
+		c.deadline = time.After(c.Server.Timeout)
+		c.listen(seq, func(m clientMessage) {
+			redis.LongpollBacklog(c.Token, m)
+		})
+	}()
+
+	return nil
+}
+
+func (c *longpollConnection) listen(seq string, onMessage func(m clientMessage)) {
+	hub := c.Server.hub
+
 	for {
 		select {
 		case <-c.deadline:
-			break loop
+			return
 		case channel := <-c.subscribe:
 			hub.Subscribe(c, channel)
 		case channel := <-c.unsubscribe:
 			hub.Unsubscribe(c, channel)
+		case s := <-c.transfer:
+			if s != seq {
+				return
+			}
 		case m := <-c.messages:
-			messages = append(messages, m)
+			onMessage(m)
 		}
 	}
-
-	return messages, nil
 }
 
 func longpollReply(w http.ResponseWriter, m ...clientMessage) {
@@ -195,6 +226,8 @@ func (c *longpollConnection) Send(channel, message string) {
 
 func (c *longpollConnection) Process(t string, args []string) {
 	switch t {
+	case "transfer":
+		c.transfer <- args[0]
 	case "subscribe":
 		c.subscribe <- args[0]
 	case "unsubscribe":
