@@ -146,7 +146,6 @@ func (c *longpollConnection) poll(w http.ResponseWriter, seq string) error {
 	if err != nil {
 		return err
 	}
-	defer hub.Disconnect(c)
 
 	// Resubscribe to all the channels that are tracked by this connection.
 	channels, err := redis.LongpollGetChannels(c.Token)
@@ -156,9 +155,9 @@ func (c *longpollConnection) poll(w http.ResponseWriter, seq string) error {
 	for _, channel := range channels {
 		err := hub.Subscribe(c, channel)
 		if err != nil {
+			hub.Disconnect(c)
 			return err
 		}
-		defer hub.Unsubscribe(c, channel)
 	}
 
 	// Kill other listeners
@@ -174,10 +173,15 @@ func (c *longpollConnection) poll(w http.ResponseWriter, seq string) error {
 	// Also handles notifications of (un)subscription which may have happend
 	// while waiting.
 	messages := []clientMessage{}
-	c.listen(seq, func(m clientMessage) {
+	transferred := c.listen(seq, func(m clientMessage) {
 		messages = append(messages, m)
 	})
 	longpollReply(w, messages...)
+
+	if transferred {
+		hub.Disconnect(c)
+		return nil
+	}
 
 	go func() {
 		// Listens for new messages until a new client connects. This ensures we
@@ -186,25 +190,26 @@ func (c *longpollConnection) poll(w http.ResponseWriter, seq string) error {
 		c.listen(seq, func(m clientMessage) {
 			redis.LongpollBacklog(c.Token, m)
 		})
+		hub.Disconnect(c)
 	}()
 
 	return nil
 }
 
-func (c *longpollConnection) listen(seq string, onMessage func(m clientMessage)) {
+func (c *longpollConnection) listen(seq string, onMessage func(m clientMessage)) bool {
 	hub := c.Server.hub
 
 	for {
 		select {
 		case <-c.deadline:
-			return
+			return false
 		case channel := <-c.subscribe:
 			hub.Subscribe(c, channel)
 		case channel := <-c.unsubscribe:
 			hub.Unsubscribe(c, channel)
 		case s := <-c.transfer:
 			if s != seq {
-				return
+				return true
 			}
 		case m := <-c.messages:
 			onMessage(m)

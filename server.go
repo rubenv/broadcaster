@@ -17,6 +17,9 @@ type Server struct {
 	// for channels.
 	CanSubscribe func(data map[string]interface{}, channel string) bool
 
+	// Can be set to allow CORS requests.
+	CheckOrigin func(r *http.Request) bool
+
 	// Can be used to configure buffer sizes etc.
 	// See http://godoc.org/github.com/gorilla/websocket#Upgrader
 	Upgrader websocket.Upgrader
@@ -67,6 +70,10 @@ func (s *Server) Prepare() error {
 		s.PollTime = 2 * time.Second
 	}
 
+	if s.Upgrader.CheckOrigin == nil && s.CheckOrigin != nil {
+		s.Upgrader.CheckOrigin = s.CheckOrigin
+	}
+
 	redis, err := newRedisBackend(s.RedisHost, s.PubSubHost, s.ControlChannel, s.ControlNamespace, s.Timeout)
 	if err != nil {
 		return err
@@ -92,6 +99,12 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if !s.prepared {
 		http.Error(w, "Prepare() not called on broadcaster.Server", 500)
 		return
+	}
+
+	if s.CheckOrigin != nil && s.CheckOrigin(r) {
+		origin := r.Header.Get("Origin")
+		w.Header().Set("Access-Control-Allow-Origin", origin)
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 	}
 
 	if r.Method == "GET" {
