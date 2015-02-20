@@ -282,6 +282,9 @@ func testUnsubscribe(t *testing.T, clientFn func(s *testServer, conf ...func(c *
 		t.Fatal(err)
 	}
 
+	// Wait for client to catch up
+	<-time.After(100 * time.Millisecond)
+
 	stats, err := server.Broadcaster.Stats()
 	if err != nil {
 		t.Fatal(err)
