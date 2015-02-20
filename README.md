@@ -32,7 +32,7 @@ const (
 	AuthOKMessage = "authOk"
 
 	// Server: Authentication failed
-	AuthFailedMessage = "authFailed"
+	AuthFailedMessage = "authError"
 
 	// Client: Subscribe to channel
 	SubscribeMessage = "subscribe"
@@ -74,7 +74,7 @@ type Client struct {
 	Mode ClientMode
 
 	// Data passed when authenticating
-	AuthData map[string]string
+	AuthData map[string]interface{}
 
 	// Set when disconnecting
 	Error error
@@ -140,11 +140,11 @@ Connection modes, can be used to force a specific connection type.
 ```go
 type Server struct {
 	// Invoked upon initial connection, can be used to enforce access control.
-	CanConnect func(data map[string]string) bool
+	CanConnect func(data map[string]interface{}) bool
 
 	// Invoked upon channel subscription, can be used to enforce access control
 	// for channels.
-	CanSubscribe func(data map[string]string, channel string) bool
+	CanSubscribe func(data map[string]interface{}, channel string) bool
 
 	// Can be used to configure buffer sizes etc.
 	// See http://godoc.org/github.com/gorilla/websocket#Upgrader

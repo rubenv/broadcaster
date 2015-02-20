@@ -28,7 +28,7 @@ func testConnect(t *testing.T, clientFn func(s *testServer, conf ...func(c *Clie
 
 func testCanConnect(t *testing.T, clientFn func(s *testServer, conf ...func(c *Client)) (*Client, error)) {
 	server, err := startServer(&Server{
-		CanConnect: func(data map[string]string) bool {
+		CanConnect: func(data map[string]interface{}) bool {
 			return false
 		},
 	}, 0)
@@ -53,7 +53,7 @@ func testCanConnect(t *testing.T, clientFn func(s *testServer, conf ...func(c *C
 
 func testAuthData(t *testing.T, clientFn func(s *testServer, conf ...func(c *Client)) (*Client, error)) {
 	server, err := startServer(&Server{
-		CanConnect: func(data map[string]string) bool {
+		CanConnect: func(data map[string]interface{}) bool {
 			return data["token"] == "abcdefg"
 		},
 	}, 0)
@@ -63,7 +63,7 @@ func testAuthData(t *testing.T, clientFn func(s *testServer, conf ...func(c *Cli
 	defer server.Stop()
 
 	_, err = clientFn(server, func(c *Client) {
-		c.AuthData = map[string]string{"token": "abcdefg"}
+		c.AuthData = map[string]interface{}{"token": "abcdefg"}
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -141,7 +141,7 @@ func testSubscribe(t *testing.T, clientFn func(s *testServer, conf ...func(c *Cl
 
 func testCanSubscribe(t *testing.T, clientFn func(s *testServer, conf ...func(c *Client)) (*Client, error)) {
 	server, err := startServer(&Server{
-		CanSubscribe: func(data map[string]string, channel string) bool {
+		CanSubscribe: func(data map[string]interface{}, channel string) bool {
 			return false
 		},
 	}, 0)

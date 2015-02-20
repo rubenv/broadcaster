@@ -22,7 +22,7 @@ type Client struct {
 	Mode ClientMode
 
 	// Data passed when authenticating
-	AuthData map[string]string
+	AuthData map[string]interface{}
 
 	// Set when disconnecting
 	Error error
@@ -229,7 +229,7 @@ func (c *Client) Unsubscribe(channel string) error {
 }
 
 type clientTransport interface {
-	Connect(authData map[string]string) error
+	Connect(authData clientMessage) error
 	Close() error
 	Send(data clientMessage) error
 	Receive() (clientMessage, error)

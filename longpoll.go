@@ -57,7 +57,7 @@ func handleLongpollConnection(w http.ResponseWriter, r *http.Request, s *Server)
 	}
 
 	if m.Type() == PollMessage {
-		return conn.poll(w, m["seq"])
+		return conn.poll(w, m["seq"].(string))
 	} else {
 		switch m.Type() {
 		case SubscribeMessage:
@@ -66,7 +66,7 @@ func handleLongpollConnection(w http.ResponseWriter, r *http.Request, s *Server)
 				return err
 			}
 
-			channel := m["channel"]
+			channel := m.Channel()
 			if s.CanSubscribe != nil && !s.CanSubscribe(auth, channel) {
 				longpollReply(w, clientMessage{
 					"__type":  SubscribeErrorMessage,
@@ -85,7 +85,7 @@ func handleLongpollConnection(w http.ResponseWriter, r *http.Request, s *Server)
 			longpollReply(w, newChannelMessage(SubscribeOKMessage, channel))
 
 		case UnsubscribeMessage:
-			channel := m["channel"]
+			channel := m.Channel()
 			err := redis.LongpollUnsubscribe(m.Token(), channel)
 			if err != nil {
 				longpollReply(w, newChannelErrorMessage(UnsubscribeErrorMessage, channel, err))
@@ -258,10 +258,10 @@ func newlongpollClientTransport(c *Client) *longpollClientTransport {
 	}
 }
 
-func (t *longpollClientTransport) Connect(authData map[string]string) error {
+func (t *longpollClientTransport) Connect(authData clientMessage) error {
 	data := authData
 	if data == nil {
-		data = make(map[string]string)
+		data = make(clientMessage)
 	}
 	data["__type"] = AuthMessage
 

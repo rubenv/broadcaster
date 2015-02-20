@@ -11,7 +11,7 @@ const (
 	AuthOKMessage = "authOk"
 
 	// Server: Authentication failed
-	AuthFailedMessage = "authFailed"
+	AuthFailedMessage = "authError"
 
 	// Client: Subscribe to channel
 	SubscribeMessage = "subscribe"
@@ -44,7 +44,7 @@ const (
 	ServerErrorMessage = "serverError"
 )
 
-type clientMessage map[string]string
+type clientMessage map[string]interface{}
 
 func (c clientMessage) ResultId() string {
 	t := c.Type()
@@ -58,11 +58,27 @@ func (c clientMessage) ResultId() string {
 }
 
 func (c clientMessage) Type() string {
-	return c["__type"]
+	s, ok := c["__type"].(string)
+	if !ok {
+		return ""
+	}
+	return s
 }
 
 func (c clientMessage) Token() string {
-	return c["__token"]
+	s, ok := c["__token"].(string)
+	if !ok {
+		return ""
+	}
+	return s
+}
+
+func (c clientMessage) Channel() string {
+	s, ok := c["channel"].(string)
+	if !ok {
+		return ""
+	}
+	return s
 }
 
 func newMessage(t string) clientMessage {

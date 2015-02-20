@@ -11,11 +11,11 @@ import (
 // chosen path to start a broadcast server.
 type Server struct {
 	// Invoked upon initial connection, can be used to enforce access control.
-	CanConnect func(data map[string]string) bool
+	CanConnect func(data map[string]interface{}) bool
 
 	// Invoked upon channel subscription, can be used to enforce access control
 	// for channels.
-	CanSubscribe func(data map[string]string, channel string) bool
+	CanSubscribe func(data map[string]interface{}, channel string) bool
 
 	// Can be used to configure buffer sizes etc.
 	// See http://godoc.org/github.com/gorilla/websocket#Upgrader

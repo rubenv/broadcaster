@@ -41,9 +41,13 @@ func (c *websocketConnection) handshake(w http.ResponseWriter, r *http.Request) 
 	}
 	c.Conn = conn
 
-	// Expect auth packet first.
 	err = conn.ReadJSON(&c.AuthData)
-	if err != nil || c.AuthData.Type() != AuthMessage {
+	if err != nil {
+		c.Close(400, err.Error())
+	}
+
+	// Expect auth packet first.
+	if c.AuthData.Type() != AuthMessage {
 		conn.WriteJSON(newErrorMessage(AuthFailedMessage, errors.New("Auth expected")))
 		c.Close(401, "Auth expected")
 		return nil
@@ -95,7 +99,7 @@ func (c *websocketConnection) Run() {
 
 		switch m.Type() {
 		case SubscribeMessage:
-			channel := m["channel"]
+			channel := m.Channel()
 			if c.Server.CanSubscribe != nil && !c.Server.CanSubscribe(c.AuthData, channel) {
 				conn.WriteJSON(newChannelErrorMessage(SubscribeErrorMessage, channel, errors.New("Channel refused")))
 				continue
@@ -109,7 +113,7 @@ func (c *websocketConnection) Run() {
 			}
 
 		case UnsubscribeMessage:
-			channel := m["channel"]
+			channel := m.Channel()
 
 			err := hub.Unsubscribe(c, channel)
 			if err != nil {
@@ -167,7 +171,7 @@ type websocketClientTransport struct {
 	client *Client
 }
 
-func (t *websocketClientTransport) Connect(authData map[string]string) error {
+func (t *websocketClientTransport) Connect(authData clientMessage) error {
 	conn, _, err := websocket.DefaultDialer.Dial(t.client.url(ClientModeWebsocket), nil)
 	if err != nil {
 		return err
@@ -179,7 +183,7 @@ func (t *websocketClientTransport) Connect(authData map[string]string) error {
 	if !t.client.skip_auth {
 		data := authData
 		if data == nil {
-			data = make(map[string]string)
+			data = make(clientMessage)
 		}
 		data["__type"] = AuthMessage
 		err := t.Send(data)
