@@ -174,6 +174,10 @@ func (c *longpollConnection) poll(w http.ResponseWriter, seq string) error {
 	// while waiting.
 	messages := []clientMessage{}
 	transferred := c.listen(seq, func(m clientMessage) {
+		if !c.combining {
+			c.deadline = time.After(c.Server.PollTime)
+			c.combining = true
+		}
 		messages = append(messages, m)
 	})
 	longpollReply(w, messages...)
@@ -222,10 +226,6 @@ func longpollReply(w http.ResponseWriter, m ...clientMessage) {
 }
 
 func (c *longpollConnection) Send(channel, message string) {
-	if !c.combining {
-		c.deadline = time.After(c.Server.PollTime)
-		c.combining = true
-	}
 	c.messages <- newBroadcastMessage(channel, message)
 }
 
