@@ -3,11 +3,13 @@ package broadcaster
 import (
 	"log"
 	"net/http"
+
+	"github.com/rubenv/broadcaster"
 )
 
 // Pass options to Server to configure Redis etc.
 func Example() {
-	s := &Server{
+	s := &broadcaster.Server{
 		RedisHost: "myredis.local:6379",
 	}
 
@@ -24,7 +26,7 @@ func Example() {
 
 // Starting a new server
 func ExampleServer_ServeHTTP() {
-	s := &Server{}
+	s := &broadcaster.Server{}
 
 	// Always call Prepare() first!
 	err := s.Prepare()
