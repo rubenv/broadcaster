@@ -195,6 +195,9 @@ func (t *websocketClientTransport) Connect(authData clientMessage) error {
 }
 
 func (t *websocketClientTransport) Close() error {
+	if t.conn == nil {
+		return nil
+	}
 	return t.conn.Close()
 }
 

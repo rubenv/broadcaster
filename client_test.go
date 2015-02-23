@@ -1,22 +1,18 @@
 package broadcaster
 
 import (
-	"log"
 	"runtime"
 	"testing"
 	"time"
 )
 
-import (
-	"net/http"
-	_ "net/http/pprof"
-)
+import _ "net/http/pprof"
 
 func init() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
-	go func() {
-		log.Println(http.ListenAndServe("localhost:6060", nil))
-	}()
+	//go func() {
+	//		log.Println(http.ListenAndServe("localhost:6060", nil))
+	//	}()
 }
 
 func testConnect(t *testing.T, clientFn func(s *testServer, conf ...func(c *Client)) (*Client, error)) {
@@ -247,9 +243,17 @@ func testMessage(t *testing.T, clientFn func(s *testServer, conf ...func(c *Clie
 		t.Fatal(err)
 	}
 
-	// Wait until polling socket is connected. There can be a small gap between
-	// connecting and listening while long-polling.
-	<-time.After(100 * time.Millisecond)
+	ready := false
+	for !ready {
+		stats, _ := server.Broadcaster.Stats()
+		if stats.LocalSubscriptions["test"] != 1 {
+			// Wait until polling socket is connected. There can be a small gap between
+			// connecting and listening while long-polling.
+			<-time.After(100 * time.Millisecond)
+		} else {
+			ready = true
+		}
+	}
 
 	err = server.sendMessage("test", "Test message")
 	if err != nil {
@@ -302,9 +306,17 @@ func testMessageChannel(t *testing.T, clientFn func(s *testServer, conf ...func(
 		t.Fatal(err)
 	}
 
-	// Wait until polling socket is connected. There can be a small gap between
-	// connecting and listening while long-polling.
-	<-time.After(100 * time.Millisecond)
+	ready := false
+	for !ready {
+		stats, _ := server.Broadcaster.Stats()
+		if stats.LocalSubscriptions["test"] != 1 {
+			// Wait until polling socket is connected. There can be a small gap between
+			// connecting and listening while long-polling.
+			<-time.After(100 * time.Millisecond)
+		} else {
+			ready = true
+		}
+	}
 
 	err = server.sendMessage("other", "Test message")
 	if err != nil {

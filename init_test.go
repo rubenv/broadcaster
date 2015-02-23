@@ -9,7 +9,6 @@ import (
 	"os/exec"
 	"strconv"
 	"sync"
-	"testing"
 	"time"
 
 	"github.com/garyburd/redigo/redis"
@@ -26,21 +25,6 @@ type testRedis struct {
 }
 
 var portSource = rand.New(rand.NewSource(26))
-
-// Starts a redis server and uses that for the tests.
-func TestMain(m *testing.M) {
-
-	var code int
-
-	// Shut down redis when done
-	defer func() {
-
-		os.Exit(code)
-	}()
-
-	// Run tests
-	code = m.Run()
-}
 
 func startRedis() (*testRedis, error) {
 	s := &testRedis{}
@@ -197,8 +181,10 @@ func (s *testServer) Start() error {
 }
 
 func (s *testServer) Stop() {
-	s.Listener.Stop()
-	s.wg.Wait()
+	go func() {
+		s.Listener.Stop()
+		s.wg.Wait()
+	}()
 	s.Redis.Stop()
 }
 
