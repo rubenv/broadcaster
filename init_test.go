@@ -32,13 +32,13 @@ func startRedis() (*testRedis, error) {
 	s.Port = 24000 + r.Intn(1000)
 
 	// Log files
-	serverOut, err := os.OpenFile("/tmp/broadcaster-redis-server.log", os.O_RDWR|os.O_CREATE, 0644)
+	serverOut, err := os.OpenFile("/tmp/broadcaster-redis-server.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
 	if err != nil {
 		fmt.Printf("Could not open server log: %s", err.Error())
 		return nil, err
 	}
 	s.serverOut = serverOut
-	monitorOut, err := os.OpenFile("/tmp/broadcaster-redis.log", os.O_RDWR|os.O_CREATE, 0644)
+	monitorOut, err := os.OpenFile("/tmp/broadcaster-redis.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
 	if err != nil {
 		fmt.Printf("Could not open monitor log: %s", err.Error())
 		return nil, err
