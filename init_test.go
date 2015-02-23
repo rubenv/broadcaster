@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"testing"
 	"time"
 
 	"github.com/garyburd/redigo/redis"
@@ -23,6 +24,13 @@ type testRedis struct {
 }
 
 var portSource = rand.New(rand.NewSource(26))
+
+func TestMain(m *testing.M) {
+	hubTestBackend, hubTestRedis = newTestRedisBackend()
+	code := m.Run()
+	hubTestRedis.Stop()
+	os.Exit(code)
+}
 
 func startRedis() (*testRedis, error) {
 	s := &testRedis{}

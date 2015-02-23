@@ -8,6 +8,9 @@ import (
 
 var testChannel = "test"
 
+var hubTestBackend *redisBackend
+var hubTestRedis *testRedis
+
 type testConnection struct {
 	Messages chan string
 }
@@ -24,10 +27,8 @@ func (c *testConnection) GetToken() string {
 }
 
 func TestHubConnectDisconnect(t *testing.T) {
-	b, s := newTestRedisBackend()
-	defer s.Stop()
 	hub := &hub{
-		redis: b,
+		redis: hubTestBackend,
 	}
 
 	err := hub.Prepare()
@@ -60,10 +61,8 @@ func TestHubConnectDisconnect(t *testing.T) {
 }
 
 func TestHubSubscribe(t *testing.T) {
-	b, s := newTestRedisBackend()
-	defer s.Stop()
 	hub := &hub{
-		redis: b,
+		redis: hubTestBackend,
 	}
 
 	err := hub.Prepare()
@@ -95,10 +94,8 @@ func TestHubSubscribe(t *testing.T) {
 }
 
 func TestHubUnsubscribe(t *testing.T) {
-	b, s := newTestRedisBackend()
-	defer s.Stop()
 	hub := &hub{
-		redis: b,
+		redis: hubTestBackend,
 	}
 
 	err := hub.Prepare()
@@ -157,10 +154,8 @@ func TestHubUnsubscribe(t *testing.T) {
 }
 
 func TestHubMessage(t *testing.T) {
-	b, s := newTestRedisBackend()
-	defer s.Stop()
 	hub := &hub{
-		redis: b,
+		redis: hubTestBackend,
 	}
 
 	err := hub.Prepare()
@@ -180,7 +175,7 @@ func TestHubMessage(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	s.sendMessage(testChannel, "1")
+	hubTestRedis.sendMessage(testChannel, "1")
 	select {
 	case <-conn.Messages:
 		t.Errorf("Shouldn't have received a message!")
@@ -192,7 +187,7 @@ func TestHubMessage(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	s.sendMessage(testChannel, "1")
+	hubTestRedis.sendMessage(testChannel, "1")
 	select {
 	case <-conn.Messages:
 	case <-time.After(1 * time.Second):
