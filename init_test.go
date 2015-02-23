@@ -8,11 +8,9 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/garyburd/redigo/redis"
-	"github.com/hydrogen18/stoppableListener"
 )
 
 type testRedis struct {
@@ -110,10 +108,8 @@ func (t *testRedis) Stop() {
 type testServer struct {
 	Port int
 
-	Listener    *stoppableListener.StoppableListener
 	Broadcaster *Server
 	HTTPServer  http.Server
-	wg          sync.WaitGroup
 
 	Redis *testRedis
 }
@@ -146,13 +142,6 @@ func (s *testServer) Start() error {
 		return err
 	}
 
-	httpListener, err := stoppableListener.New(listener)
-	if err != nil {
-		return err
-	}
-
-	s.Listener = httpListener
-
 	if s.Broadcaster == nil {
 		s.Broadcaster = &Server{}
 	}
@@ -172,19 +161,13 @@ func (s *testServer) Start() error {
 	s.HTTPServer = http.Server{Handler: mux}
 
 	go func() {
-		s.wg.Add(1)
-		defer s.wg.Done()
-		s.HTTPServer.Serve(s.Listener)
+		s.HTTPServer.Serve(listener)
 	}()
 
 	return nil
 }
 
 func (s *testServer) Stop() {
-	go func() {
-		s.Listener.Stop()
-		s.wg.Wait()
-	}()
 	s.Redis.Stop()
 }
 

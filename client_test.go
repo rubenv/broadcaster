@@ -1,7 +1,6 @@
 package broadcaster
 
 import (
-	"runtime"
 	"testing"
 	"time"
 )
@@ -9,7 +8,7 @@ import (
 import _ "net/http/pprof"
 
 func init() {
-	runtime.GOMAXPROCS(runtime.NumCPU())
+	//runtime.GOMAXPROCS(runtime.NumCPU())
 	//go func() {
 	//		log.Println(http.ListenAndServe("localhost:6060", nil))
 	//	}()
