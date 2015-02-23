@@ -16,42 +16,68 @@ import (
 	"github.com/hydrogen18/stoppableListener"
 )
 
-var redisPort int
-var redisClient redis.Conn
+type testRedis struct {
+	Port       int
+	Client     redis.Conn
+	serverOut  *os.File
+	serverCmd  *exec.Cmd
+	monitorOut *os.File
+	monitorCmd *exec.Cmd
+}
+
 var portSource = rand.New(rand.NewSource(26))
 
 // Starts a redis server and uses that for the tests.
 func TestMain(m *testing.M) {
+
+	var code int
+
+	// Shut down redis when done
+	defer func() {
+
+		os.Exit(code)
+	}()
+
+	// Run tests
+	code = m.Run()
+}
+
+func startRedis() (*testRedis, error) {
+	s := &testRedis{}
+
 	// Get random port for redis
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	redisPort = 24000 + r.Intn(1000)
+	s.Port = 24000 + r.Intn(1000)
 
 	// Log files
 	serverOut, err := os.Create("/tmp/broadcaster-redis-server.log")
 	if err != nil {
 		fmt.Printf("Could not open server log: %s", err.Error())
-		return
+		return nil, err
 	}
+	s.serverOut = serverOut
 	monitorOut, err := os.Create("/tmp/broadcaster-redis.log")
 	if err != nil {
 		fmt.Printf("Could not open monitor log: %s", err.Error())
-		return
+		return nil, err
 	}
+	s.monitorOut = monitorOut
 
 	// Start redis
-	cmd := exec.Command("redis-server", "--port", strconv.Itoa(redisPort), "--loglevel", "debug")
+	cmd := exec.Command("redis-server", "--port", strconv.Itoa(s.Port), "--loglevel", "debug")
 	cmd.Stdout = serverOut
 	cmd.Stderr = serverOut
 	err = cmd.Start()
 	if err != nil {
-		fmt.Printf("Could not start redis on port %d\n", redisPort)
-		os.Exit(1)
+		fmt.Printf("Could not start redis on port %d\n", s.Port)
+		return nil, err
 	}
+	s.serverCmd = cmd
 
 	// Hammer it until it runs
 	awake := false
 	for !awake {
-		c, err := redis.Dial("tcp", fmt.Sprintf(":%d", redisPort))
+		c, err := redis.Dial("tcp", fmt.Sprintf(":%d", s.Port))
 		if err == nil {
 			c.Close()
 			awake = true
@@ -59,14 +85,15 @@ func TestMain(m *testing.M) {
 	}
 
 	// Redis client
-	redisClient, err = redis.Dial("tcp", fmt.Sprintf(":%d", redisPort))
+	redisClient, err := redis.Dial("tcp", fmt.Sprintf(":%d", s.Port))
 	if err != nil {
 		fmt.Println("Could not connect to redis")
 		os.Exit(1)
 	}
+	s.Client = redisClient
 
 	// Monitor the redis server to make debugging easier
-	monitorCmd := exec.Command("redis-cli", "-p", strconv.Itoa(redisPort), "monitor")
+	monitorCmd := exec.Command("redis-cli", "-p", strconv.Itoa(s.Port), "monitor")
 	monitorCmd.Stdout = monitorOut
 	monitorCmd.Stderr = monitorOut
 	err = monitorCmd.Start()
@@ -74,25 +101,26 @@ func TestMain(m *testing.M) {
 		fmt.Printf("Could not start redis monitor\n")
 		os.Exit(1)
 	}
+	s.monitorCmd = monitorCmd
 
-	var code int
+	return s, nil
+}
 
-	// Shut down redis when done
-	defer func() {
-		defer redisClient.Close()
-		defer serverOut.Close()
-		defer monitorOut.Close()
+func (t *testRedis) sendMessage(channel, message string) error {
+	_, err := t.Client.Do("PUBLISH", channel, message)
+	return err
+}
 
-		monitorCmd.Process.Kill()
+func (t *testRedis) Stop() {
+	t.monitorCmd.Process.Kill()
 
-		redisClient.Do("SHUTDOWN", "NOSAVE")
-		cmd.Wait()
+	t.Client.Do("SHUTDOWN", "NOSAVE")
 
-		os.Exit(code)
-	}()
+	t.Client.Close()
+	t.serverOut.Close()
+	t.monitorOut.Close()
 
-	// Run tests
-	code = m.Run()
+	t.serverCmd.Wait()
 }
 
 type testServer struct {
@@ -102,10 +130,12 @@ type testServer struct {
 	Broadcaster *Server
 	HTTPServer  http.Server
 	wg          sync.WaitGroup
+
+	Redis *testRedis
 }
 
 func startServer(s *Server, port int) (*testServer, error) {
-	_, err := redisClient.Do("FLUSHALL")
+	r, err := startRedis()
 	if err != nil {
 		return nil, err
 	}
@@ -117,6 +147,7 @@ func startServer(s *Server, port int) (*testServer, error) {
 	server := &testServer{
 		Port:        port,
 		Broadcaster: s,
+		Redis:       r,
 	}
 	err = server.Start()
 	if err != nil {
@@ -142,7 +173,8 @@ func (s *testServer) Start() error {
 		s.Broadcaster = &Server{}
 	}
 
-	s.Broadcaster.RedisHost = fmt.Sprintf("localhost:%d", redisPort)
+	s.Broadcaster.RedisHost = fmt.Sprintf("localhost:%d", s.Redis.Port)
+	s.Broadcaster.Timeout = 1 * time.Second
 	s.Broadcaster.PollTime = 100 * time.Millisecond
 
 	err = s.Broadcaster.Prepare()
@@ -165,24 +197,26 @@ func (s *testServer) Start() error {
 }
 
 func (s *testServer) Stop() {
-	go func() {
-		s.Listener.Stop()
-		s.wg.Wait()
-	}()
+	s.Listener.Stop()
+	s.wg.Wait()
+	s.Redis.Stop()
 }
 
-func sendMessage(channel, message string) error {
-	_, err := redisClient.Do("PUBLISH", channel, message)
-	return err
+func (s *testServer) sendMessage(channel, message string) error {
+	return s.Redis.sendMessage(channel, message)
 }
 
-func newTestRedisBackend() *redisBackend {
-	u := fmt.Sprintf("localhost:%d", redisPort)
+func newTestRedisBackend() (*redisBackend, *testRedis) {
+	s, err := startRedis()
+	if err != nil {
+		panic(err)
+	}
+	u := fmt.Sprintf("localhost:%d", s.Port)
 	b, err := newRedisBackend(u, u, "broadcaster", "bc:", 1*time.Second)
 	if err != nil {
 		panic(err)
 	}
-	return b
+	return b, s
 }
 
 func newWSClient(s *testServer, conf ...func(c *Client)) (*Client, error) {

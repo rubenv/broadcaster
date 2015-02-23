@@ -142,14 +142,14 @@ func (c *Client) Connect() error {
 
 func (c *Client) Disconnect() error {
 	c.should_disconnect = true
-	close(c.Messages)
-	for _, r := range c.results {
-		close(r)
-	}
 	err := c.transport.Close()
 	if err != nil && c.Error == nil {
 		c.Error = err
 	}
+	for _, r := range c.results {
+		close(r)
+	}
+	close(c.Messages)
 	return c.Error
 }
 
@@ -181,8 +181,7 @@ func (c *Client) listen() {
 	for {
 		m, err := c.receive()
 		if err != nil {
-			c.Error = err
-			c.Disconnect()
+			c.disconnected()
 			return
 		}
 

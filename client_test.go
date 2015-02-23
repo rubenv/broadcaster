@@ -1,9 +1,23 @@
 package broadcaster
 
 import (
+	"log"
+	"runtime"
 	"testing"
 	"time"
 )
+
+import (
+	"net/http"
+	_ "net/http/pprof"
+)
+
+func init() {
+	runtime.GOMAXPROCS(runtime.NumCPU())
+	go func() {
+		log.Println(http.ListenAndServe("localhost:6060", nil))
+	}()
+}
 
 func testConnect(t *testing.T, clientFn func(s *testServer, conf ...func(c *Client)) (*Client, error)) {
 	server, err := startServer(nil, 0)
@@ -12,10 +26,11 @@ func testConnect(t *testing.T, clientFn func(s *testServer, conf ...func(c *Clie
 	}
 	defer server.Stop()
 
-	_, err = clientFn(server)
+	client, err := clientFn(server)
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer client.Disconnect()
 
 	stats, err := server.Broadcaster.Stats()
 	if err != nil {
@@ -37,9 +52,12 @@ func testCanConnect(t *testing.T, clientFn func(s *testServer, conf ...func(c *C
 	}
 	defer server.Stop()
 
-	_, err = clientFn(server)
+	client, err := clientFn(server)
 	if err == nil || err.Error() != "Auth error: Unauthorized" {
 		t.Fatal("Did not properly deny access")
+	}
+	if client != nil {
+		t.Fatal("Did not expect client")
 	}
 
 	stats, err := server.Broadcaster.Stats()
@@ -62,12 +80,13 @@ func testAuthData(t *testing.T, clientFn func(s *testServer, conf ...func(c *Cli
 	}
 	defer server.Stop()
 
-	_, err = clientFn(server, func(c *Client) {
+	client, err := clientFn(server, func(c *Client) {
 		c.AuthData = map[string]interface{}{"token": "abcdefg"}
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
+	client.Disconnect()
 }
 
 func testRefusesUnauthedCommands(t *testing.T, clientFn func(s *testServer, conf ...func(c *Client)) (*Client, error)) {
@@ -83,6 +102,7 @@ func testRefusesUnauthedCommands(t *testing.T, clientFn func(s *testServer, conf
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer client.Disconnect()
 
 	err = client.send("bla", nil)
 	if err != nil {
@@ -117,6 +137,7 @@ func testSubscribe(t *testing.T, clientFn func(s *testServer, conf ...func(c *Cl
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer client.Disconnect()
 
 	err = client.Subscribe("test")
 	if err != nil {
@@ -154,6 +175,7 @@ func testCanSubscribe(t *testing.T, clientFn func(s *testServer, conf ...func(c 
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer client.Disconnect()
 
 	err = client.Subscribe("test")
 	if err == nil {
@@ -183,6 +205,7 @@ func testMessageTypes(t *testing.T, clientFn func(s *testServer, conf ...func(c 
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer client.Disconnect()
 
 	err = client.send("bla", nil)
 	if err != nil {
@@ -217,6 +240,7 @@ func testMessage(t *testing.T, clientFn func(s *testServer, conf ...func(c *Clie
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer client.Disconnect()
 
 	err = client.Subscribe("test")
 	if err != nil {
@@ -227,12 +251,12 @@ func testMessage(t *testing.T, clientFn func(s *testServer, conf ...func(c *Clie
 	// connecting and listening while long-polling.
 	<-time.After(100 * time.Millisecond)
 
-	err = sendMessage("test", "Test message")
+	err = server.sendMessage("test", "Test message")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = sendMessage("test", "Test message 2")
+	err = server.sendMessage("test", "Test message 2")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -249,7 +273,7 @@ func testMessage(t *testing.T, clientFn func(s *testServer, conf ...func(c *Clie
 
 	// Wait until next polling interval (tests follow-up connections)
 	<-time.After(100 * time.Millisecond)
-	err = sendMessage("test", "Test message 3")
+	err = server.sendMessage("test", "Test message 3")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -271,6 +295,7 @@ func testMessageChannel(t *testing.T, clientFn func(s *testServer, conf ...func(
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer client.Disconnect()
 
 	err = client.Subscribe("test")
 	if err != nil {
@@ -281,12 +306,12 @@ func testMessageChannel(t *testing.T, clientFn func(s *testServer, conf ...func(
 	// connecting and listening while long-polling.
 	<-time.After(100 * time.Millisecond)
 
-	err = sendMessage("other", "Test message")
+	err = server.sendMessage("other", "Test message")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = sendMessage("test", "Test message")
+	err = server.sendMessage("test", "Test message")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -314,6 +339,7 @@ func testUnsubscribe(t *testing.T, clientFn func(s *testServer, conf ...func(c *
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer client.Disconnect()
 
 	err = client.Subscribe("test")
 	if err != nil {

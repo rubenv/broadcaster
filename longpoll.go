@@ -3,7 +3,6 @@ package broadcaster
 import (
 	"bytes"
 	"encoding/json"
-	"math/rand"
 	"net/http"
 	"strconv"
 	"time"
@@ -252,14 +251,17 @@ type longpollClientTransport struct {
 	err        error
 	token      string
 	httpClient http.Client
+	httpReq    *http.Request
 	call       int
 }
 
 func newlongpollClientTransport(c *Client) *longpollClientTransport {
 	return &longpollClientTransport{
-		client:     c,
-		messages:   make(chan clientMessage, 10),
-		httpClient: http.Client{},
+		client:   c,
+		messages: make(chan clientMessage, 10),
+		httpClient: http.Client{
+			Transport: http.DefaultTransport,
+		},
 	}
 }
 
@@ -279,7 +281,11 @@ func (t *longpollClientTransport) Connect(authData clientMessage) error {
 
 func (t *longpollClientTransport) Close() error {
 	t.running = false
-	close(t.messages)
+	if t.httpReq != nil {
+		if transport, ok := t.httpClient.Transport.(*http.Transport); ok {
+			transport.CancelRequest(t.httpReq)
+		}
+	}
 	return nil
 }
 
@@ -334,13 +340,24 @@ func (t *longpollClientTransport) poll() {
 
 	for t.running {
 		url := t.client.url(ClientModeLongPoll)
-		resp, err := t.httpClient.Post(url, "application/json", bytes.NewBuffer(buf))
+		req, err := http.NewRequest("POST", url, bytes.NewBuffer(buf))
+		if err != nil {
+			t.client.disconnected()
+			continue
+		}
+
+		t.httpReq = req
+		t.httpReq.Header.Set("Content-Type", "application/json")
+		resp, err := t.httpClient.Do(t.httpReq)
 		if err != nil || resp.StatusCode != 200 {
-			// Random backoff
-			<-time.After(time.Duration(rand.Int63n(int64(t.client.Timeout / 2))))
+			t.client.disconnected()
 			continue
 		}
 		defer resp.Body.Close()
+
+		if !t.running {
+			continue
+		}
 
 		result := []clientMessage{}
 		json.NewDecoder(resp.Body).Decode(&result)
@@ -348,4 +365,7 @@ func (t *longpollClientTransport) poll() {
 			t.messages <- v
 		}
 	}
+
+	t.httpReq = nil
+	close(t.messages)
 }
