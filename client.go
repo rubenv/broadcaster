@@ -1,6 +1,7 @@
 package broadcaster
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"time"
@@ -30,8 +31,14 @@ type Client struct {
 	// Incoming messages
 	Messages chan clientMessage
 
+	// Receives true when disconnected
+	Disconnected chan bool
+
 	// Timeout
 	Timeout time.Duration
+
+	// Reconnection attempts
+	MaxAttempts int
 
 	// Connection params
 	host   string
@@ -42,8 +49,11 @@ type Client struct {
 	skip_auth bool
 
 	// Internal bits
-	transport clientTransport
-	results   map[string]messageChan
+	transport         clientTransport
+	results           map[string]messageChan
+	should_disconnect bool
+	attempts          int
+	channels          map[string]bool
 }
 
 func NewClient(urlStr string) (*Client, error) {
@@ -53,10 +63,14 @@ func NewClient(urlStr string) (*Client, error) {
 	}
 
 	return &Client{
-		host:    u.Host,
-		path:    u.Path,
-		secure:  u.Scheme == "https",
-		Timeout: 30 * time.Second,
+		host:         u.Host,
+		path:         u.Path,
+		secure:       u.Scheme == "https",
+		Timeout:      30 * time.Second,
+		MaxAttempts:  10,
+		channels:     make(map[string]bool),
+		Messages:     make(messageChan, 10),
+		Disconnected: make(chan bool, 0),
 	}, nil
 }
 
@@ -75,6 +89,8 @@ func (c *Client) url(mode ClientMode) string {
 }
 
 func (c *Client) Connect() error {
+	c.should_disconnect = false
+
 	if c.Mode == ClientModeAuto || c.Mode == ClientModeWebsocket {
 		c.transport = &websocketClientTransport{client: c}
 		err := c.transport.Connect(c.AuthData)
@@ -99,11 +115,6 @@ func (c *Client) Connect() error {
 		return fmt.Errorf("Unknown client mode: %d", c.Mode)
 	}
 
-	// Make sure we have a messages channel
-	if c.Messages == nil {
-		c.Messages = make(messageChan, 10)
-	}
-
 	if !c.skip_auth {
 		m, err := c.transport.Receive()
 		if err != nil {
@@ -119,10 +130,18 @@ func (c *Client) Connect() error {
 
 	go c.listen()
 
+	for channel, _ := range c.channels {
+		err := c.Subscribe(channel)
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
 func (c *Client) Disconnect() error {
+	c.should_disconnect = true
 	close(c.Messages)
 	for _, r := range c.results {
 		close(r)
@@ -132,6 +151,28 @@ func (c *Client) Disconnect() error {
 		c.Error = err
 	}
 	return c.Error
+}
+
+func (c *Client) disconnected() {
+	if c.should_disconnect {
+		return
+	}
+
+	if c.attempts == c.MaxAttempts {
+		c.Error = errors.New("Disconnected")
+		c.Disconnected <- true
+	}
+
+	c.attempts++
+	err := c.Connect()
+	if err == nil {
+		// Connected!
+		return
+	}
+
+	// Back off
+	<-time.After(time.Duration(c.attempts-1) * time.Second)
+	c.disconnected()
 }
 
 func (c *Client) listen() {
@@ -210,6 +251,7 @@ func (c *Client) Subscribe(channel string) error {
 	if m["channel"] != channel {
 		return fmt.Errorf("Expected channel %s, got %s instead", channel, m["channel"])
 	}
+	c.channels[channel] = true
 	return nil
 }
 
@@ -225,6 +267,7 @@ func (c *Client) Unsubscribe(channel string) error {
 	if m["channel"] != channel {
 		return fmt.Errorf("Expected channel %s, got %s instead", channel, m["channel"])
 	}
+	c.channels[channel] = false
 	return nil
 }
 
