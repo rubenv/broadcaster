@@ -67,7 +67,7 @@ func (s *Server) Prepare() error {
 		s.Timeout = 30 * time.Second
 	}
 	if s.PollTime == 0 {
-		s.PollTime = 2 * time.Second
+		s.PollTime = 500 * time.Millisecond
 	}
 
 	if s.Upgrader.CheckOrigin == nil && s.CheckOrigin != nil {
