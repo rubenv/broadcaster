@@ -121,6 +121,9 @@ func (c *websocketConnection) Run() {
 			}
 			conn.WriteJSON(newChannelMessage(UnsubscribeOKMessage, channel))
 
+		case PingMessage:
+			// Do nothing
+
 		default:
 			conn.WriteJSON(newMessage(UnknownMessage))
 			break

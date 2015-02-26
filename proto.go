@@ -37,6 +37,9 @@ const (
 	// Client: Send me more messages
 	PollMessage = "poll"
 
+	// Client: I'm still alive
+	PingMessage = "ping"
+
 	// Server: Unknown message
 	UnknownMessage = "unknown"
 
