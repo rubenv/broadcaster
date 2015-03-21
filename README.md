@@ -5,6 +5,9 @@
 Package broadcaster implements a websocket server for broadcasting Redis pub/sub
 messages to web clients.
 
+A JavaScript client can be found here:
+https://github.com/rubenv/broadcaster-client
+
 # Work In Progress!
 
 Originally based on https://github.com/rubenv/node-broadcast-hub but
@@ -58,6 +61,9 @@ const (
 	// Client: Send me more messages
 	PollMessage = "poll"
 
+	// Client: I'm still alive
+	PingMessage = "ping"
+
 	// Server: Unknown message
 	UnknownMessage = "unknown"
 
@@ -82,8 +88,14 @@ type Client struct {
 	// Incoming messages
 	Messages chan clientMessage
 
+	// Receives true when disconnected
+	Disconnected chan bool
+
 	// Timeout
 	Timeout time.Duration
+
+	// Reconnection attempts
+	MaxAttempts int
 }
 ```
 
@@ -145,6 +157,9 @@ type Server struct {
 	// Invoked upon channel subscription, can be used to enforce access control
 	// for channels.
 	CanSubscribe func(data map[string]interface{}, channel string) bool
+
+	// Can be set to allow CORS requests.
+	CheckOrigin func(r *http.Request) bool
 
 	// Can be used to configure buffer sizes etc.
 	// See http://godoc.org/github.com/gorilla/websocket#Upgrader
