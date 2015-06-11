@@ -38,6 +38,10 @@ func newRedisBackend(redisHost, pubsubHost, controlChannel, prefix string, timeo
 			Dial: func() (redis.Conn, error) {
 				return redis.Dial("tcp", redisHost)
 			},
+			TestOnBorrow: func(c redis.Conn, t time.Time) error {
+				_, err := c.Do("PING")
+				return err
+			},
 		},
 		pubSub:         pubSub,
 		prefix:         prefix,
