@@ -2,7 +2,6 @@ package broadcaster
 
 import (
 	"errors"
-	"fmt"
 	"strings"
 
 	"github.com/garyburd/redigo/redis"
@@ -130,7 +129,10 @@ func (h *hub) Unsubscribe(conn connection, channel string) error {
 		return errors.New("Unknown connection")
 	}
 	if _, ok := h.subscriptions[conn][channel]; !ok {
-		return fmt.Errorf("Not subscribed to channel %s", channel)
+		// Some clients seem to be sending double unsubscribes,
+		// ignore those for now:
+		//return fmt.Errorf("Not subscribed to channel %s", channel)
+		return nil
 	}
 
 	r := subscriptionRequest{
