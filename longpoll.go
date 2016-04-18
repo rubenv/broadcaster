@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"time"
 
-	"code.google.com/p/go-uuid/uuid"
+	"github.com/pborman/uuid"
 )
 
 type longpollConnection struct {
