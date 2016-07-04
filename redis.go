@@ -18,6 +18,14 @@ type redisBackend struct {
 	Messages chan redis.Message
 }
 
+const (
+	redisSleep          time.Duration = 5 * time.Second
+	redisPingInterval   time.Duration = 3 * time.Second
+	redisConnectTimeout time.Duration = 5 * time.Second
+	redisReadTimeout    time.Duration = 5 * time.Minute
+	redisWriteTimeout   time.Duration = 5 * time.Second
+)
+
 func newRedisBackend(redisHost, pubsubHost, controlChannel, prefix string, timeout time.Duration) (*redisBackend, error) {
 	p, err := redis.Dial("tcp", pubsubHost)
 	if err != nil {
@@ -31,16 +39,31 @@ func newRedisBackend(redisHost, pubsubHost, controlChannel, prefix string, timeo
 		return nil, err
 	}
 
+	r := newConnectionRetrier(nil)
+
 	b := &redisBackend{
 		conn: redis.Pool{
 			MaxIdle:     3,
 			IdleTimeout: 60 * time.Second,
 			Dial: func() (redis.Conn, error) {
-				return redis.Dial("tcp", redisHost)
+				var conn redis.Conn
+				err := r.Run(func() error {
+					c, err := redis.DialTimeout("tcp", redisHost, redisConnectTimeout, redisReadTimeout, redisWriteTimeout)
+					if err != nil {
+						return err
+					}
+					conn = c
+					return nil
+
+				})
+				return conn, err
 			},
 			TestOnBorrow: func(c redis.Conn, t time.Time) error {
-				_, err := c.Do("PING")
-				return err
+				if time.Now().Sub(t) > redisPingInterval {
+					_, err := c.Do("PING")
+					return err
+				}
+				return nil
 			},
 		},
 		pubSub:         pubSub,
