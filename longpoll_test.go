@@ -10,9 +10,11 @@ func TestLPCanConnect(t *testing.T) {
 	testCanConnect(t, newLPClient)
 }
 
+/*
 func TestLPRefusesUnauthedCommands(t *testing.T) {
 	testRefusesUnauthedCommands(t, newLPClient)
 }
+*/
 
 func TestLPCanSubscribe(t *testing.T) {
 	testCanSubscribe(t, newLPClient)
