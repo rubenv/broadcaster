@@ -27,10 +27,21 @@ const (
 )
 
 func newRedisBackend(redisHost, pubsubHost, controlChannel, prefix string, timeout time.Duration) (*redisBackend, error) {
-	p, err := redis.Dial("tcp", pubsubHost)
+	r := newConnectionRetrier(nil)
+
+	var p redis.Conn
+	err := r.Run(func() error {
+		c, err := redis.DialTimeout("tcp", pubsubHost, redisConnectTimeout, redisReadTimeout, redisWriteTimeout)
+		if err != nil {
+			return err
+		}
+		p = c
+		return nil
+	})
 	if err != nil {
 		return nil, err
 	}
+
 	pubSub := redis.PubSubConn{Conn: p}
 
 	err = pubSub.Subscribe(controlChannel)
@@ -38,8 +49,6 @@ func newRedisBackend(redisHost, pubsubHost, controlChannel, prefix string, timeo
 		pubSub.Close()
 		return nil, err
 	}
-
-	r := newConnectionRetrier(nil)
 
 	b := &redisBackend{
 		conn: redis.Pool{
@@ -54,7 +63,6 @@ func newRedisBackend(redisHost, pubsubHost, controlChannel, prefix string, timeo
 					}
 					conn = c
 					return nil
-
 				})
 				return conn, err
 			},
