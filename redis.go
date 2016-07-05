@@ -3,50 +3,49 @@ package broadcaster
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"log"
+	"sync"
 	"time"
 
+	"github.com/eapache/go-resiliency/retrier"
 	"github.com/garyburd/redigo/redis"
 )
 
 type redisBackend struct {
 	conn           redis.Pool
 	pubSub         redis.PubSubConn
+	pubSubHost     string
 	prefix         string
 	timeout        int
 	controlChannel string
+	listening      bool
+	controlWait    sync.WaitGroup
+
+	dialRetrier *retrier.Retrier
+	dialOptions []redis.DialOption
+
+	subscriptions     map[string]bool
+	subscriptionsLock sync.Mutex
 
 	Messages chan redis.Message
 }
 
 const (
+	redisSleep          time.Duration = 1 * time.Second
 	redisPingInterval   time.Duration = 3 * time.Second
 	redisConnectTimeout time.Duration = 5 * time.Second
 	redisReadTimeout    time.Duration = 5 * time.Minute
 	redisWriteTimeout   time.Duration = 5 * time.Second
 )
 
-func newRedisBackend(redisHost, pubsubHost, controlChannel, prefix string, timeout time.Duration) (*redisBackend, error) {
+func newRedisBackend(redisHost, pubSubHost, controlChannel, prefix string, timeout time.Duration) (*redisBackend, error) {
 	r := newConnectionRetrier(nil)
 
-	var p redis.Conn
-	err := r.Run(func() error {
-		c, err := redis.DialTimeout("tcp", pubsubHost, redisConnectTimeout, redisReadTimeout, redisWriteTimeout)
-		if err != nil {
-			return err
-		}
-		p = c
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	pubSub := redis.PubSubConn{Conn: p}
-
-	err = pubSub.Subscribe(controlChannel)
-	if err != nil {
-		pubSub.Close()
-		return nil, err
+	opts := []redis.DialOption{
+		redis.DialConnectTimeout(redisConnectTimeout),
+		redis.DialReadTimeout(redisReadTimeout),
+		redis.DialWriteTimeout(redisWriteTimeout),
 	}
 
 	b := &redisBackend{
@@ -56,7 +55,7 @@ func newRedisBackend(redisHost, pubsubHost, controlChannel, prefix string, timeo
 			Dial: func() (redis.Conn, error) {
 				var conn redis.Conn
 				err := r.Run(func() error {
-					c, err := redis.DialTimeout("tcp", redisHost, redisConnectTimeout, redisReadTimeout, redisWriteTimeout)
+					c, err := redis.Dial("tcp", redisHost, opts...)
 					if err != nil {
 						return err
 					}
@@ -73,10 +72,13 @@ func newRedisBackend(redisHost, pubsubHost, controlChannel, prefix string, timeo
 				return nil
 			},
 		},
-		pubSub:         pubSub,
+		dialOptions:    opts,
+		dialRetrier:    r,
 		prefix:         prefix,
+		pubSubHost:     pubSubHost,
 		timeout:        int(timeout.Seconds()) + 1,
 		controlChannel: controlChannel,
+		subscriptions:  make(map[string]bool),
 		Messages:       make(chan redis.Message, 250),
 	}
 
@@ -87,12 +89,69 @@ func newRedisBackend(redisHost, pubsubHost, controlChannel, prefix string, timeo
 
 func (b *redisBackend) listen() {
 	for {
+		err := b.receive()
+		if err != nil && err != io.EOF {
+			log.Printf("Redis error: %s", err)
+		}
+
+		// Sleep until next iteration
+		time.Sleep(redisSleep)
+	}
+}
+
+func (b *redisBackend) connect() error {
+	b.listening = false
+	b.controlWait.Add(1)
+	defer b.controlWait.Done()
+
+	var p redis.Conn
+	err := b.dialRetrier.Run(func() error {
+		c, err := redis.Dial("tcp", b.pubSubHost, b.dialOptions...)
+		if err != nil {
+			return err
+		}
+		p = c
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	b.pubSub = redis.PubSubConn{Conn: p}
+
+	err = b.pubSub.Subscribe(b.controlChannel)
+	if err != nil {
+		b.pubSub.Close()
+		return err
+	}
+
+	b.subscriptionsLock.Lock()
+	defer b.subscriptionsLock.Unlock()
+	for k, _ := range b.subscriptions {
+		err = b.pubSub.Subscribe(k)
+		if err != nil {
+			b.pubSub.Close()
+			return err
+		}
+	}
+
+	b.listening = true
+	return nil
+}
+
+func (b *redisBackend) receive() error {
+	err := b.connect()
+	if err != nil {
+		return err
+	}
+
+	for {
 		switch v := b.pubSub.Receive().(type) {
 		case redis.Message:
 			b.Messages <- v
 		case error:
 			// Server stopped?
-			return
+			return v.(error)
 		}
 	}
 }
@@ -183,10 +242,22 @@ func (b *redisBackend) IsConnected(token string) (bool, error) {
 }
 
 func (b *redisBackend) Subscribe(channel string) error {
+	for !b.listening {
+		b.controlWait.Wait()
+	}
+	b.subscriptionsLock.Lock()
+	defer b.subscriptionsLock.Unlock()
+	b.subscriptions[channel] = true
 	return b.pubSub.Subscribe(channel)
 }
 
 func (b *redisBackend) Unsubscribe(channel string) error {
+	for !b.listening {
+		b.controlWait.Wait()
+	}
+	b.subscriptionsLock.Lock()
+	defer b.subscriptionsLock.Unlock()
+	delete(b.subscriptions, channel)
 	return b.pubSub.Unsubscribe(channel)
 }
 

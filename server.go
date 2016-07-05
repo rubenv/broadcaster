@@ -97,7 +97,7 @@ func (s *Server) Prepare() error {
 // Main HTTP server.
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if !s.prepared {
-		http.Error(w, "Prepare() not called on broadcaster.Server", 500)
+		http.Error(w, "Prepare() not called on broadcaster.Server", http.StatusInternalServerError)
 		return
 	}
 
@@ -108,7 +108,13 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == "GET" {
-		s.handleWebsocket(w, r)
+		if r.URL.Path == "/health" {
+			if !s.redis.listening {
+				http.Error(w, "No connection to redis", http.StatusServiceUnavailable)
+			}
+		} else {
+			s.handleWebsocket(w, r)
+		}
 	} else if r.Method == "POST" {
 		s.handleLongPoll(w, r)
 	}
@@ -122,7 +128,7 @@ func (s *Server) handleWebsocket(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleLongPoll(w http.ResponseWriter, r *http.Request) {
 	err := handleLongpollConnection(w, r, s)
 	if err != nil {
-		http.Error(w, err.Error(), 500)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
 
