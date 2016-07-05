@@ -19,7 +19,6 @@ type redisBackend struct {
 }
 
 const (
-	redisSleep          time.Duration = 5 * time.Second
 	redisPingInterval   time.Duration = 3 * time.Second
 	redisConnectTimeout time.Duration = 5 * time.Second
 	redisReadTimeout    time.Duration = 5 * time.Minute
