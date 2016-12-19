@@ -17,7 +17,7 @@ const (
 	ClientModeLongPoll  ClientMode = 2
 )
 
-type messageChan chan clientMessage
+type messageChan chan ClientMessage
 
 type Client struct {
 	Mode ClientMode
@@ -29,7 +29,7 @@ type Client struct {
 	Error error
 
 	// Incoming messages
-	Messages chan clientMessage
+	Messages chan ClientMessage
 
 	// Receives true when disconnected
 	Disconnected chan bool
@@ -198,29 +198,29 @@ func (c *Client) listen() {
 	}
 }
 
-func (c *Client) send(msg string, data clientMessage) error {
+func (c *Client) send(msg string, data ClientMessage) error {
 	if data == nil {
-		data = make(clientMessage)
+		data = make(ClientMessage)
 	}
 	data["__type"] = msg
 	return c.transport.Send(data)
 }
 
-func (c *Client) receive() (clientMessage, error) {
+func (c *Client) receive() (ClientMessage, error) {
 	return c.transport.Receive()
 }
 
-func (c *Client) resultChan(format string, args ...interface{}) chan clientMessage {
+func (c *Client) resultChan(format string, args ...interface{}) chan ClientMessage {
 	if c.results == nil {
 		c.results = make(map[string]messageChan)
 	}
 	name := fmt.Sprintf(format, args...)
-	channel := make(chan clientMessage, 1)
+	channel := make(chan ClientMessage, 1)
 	c.results[name] = channel
 	return channel
 }
 
-func (c *Client) call(msgType string, msg clientMessage) (clientMessage, error) {
+func (c *Client) call(msgType string, msg ClientMessage) (ClientMessage, error) {
 	result := c.resultChan("%s_%s", msgType, msg["channel"])
 
 	err := c.send(msgType, msg)
@@ -236,7 +236,7 @@ func (c *Client) call(msgType string, msg clientMessage) (clientMessage, error) 
 }
 
 func (c *Client) Subscribe(channel string) error {
-	m, err := c.call(SubscribeMessage, clientMessage{"channel": channel})
+	m, err := c.call(SubscribeMessage, ClientMessage{"channel": channel})
 	if err != nil {
 		return err
 	}
@@ -255,7 +255,7 @@ func (c *Client) Subscribe(channel string) error {
 }
 
 func (c *Client) Unsubscribe(channel string) error {
-	m, err := c.call(UnsubscribeMessage, clientMessage{"channel": channel})
+	m, err := c.call(UnsubscribeMessage, ClientMessage{"channel": channel})
 	if err != nil {
 		return err
 	}
@@ -271,10 +271,10 @@ func (c *Client) Unsubscribe(channel string) error {
 }
 
 type clientTransport interface {
-	Connect(authData clientMessage) error
+	Connect(authData ClientMessage) error
 	Close() error
-	Send(data clientMessage) error
-	Receive() (clientMessage, error)
+	Send(data ClientMessage) error
+	Receive() (ClientMessage, error)
 
 	onConnect()
 }

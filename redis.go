@@ -183,7 +183,7 @@ func (b *redisBackend) GetConnected() (int, error) {
 	return r, nil
 }
 
-func (b *redisBackend) StoreSession(token string, auth clientMessage) error {
+func (b *redisBackend) StoreSession(token string, auth ClientMessage) error {
 	// No need to store these
 	delete(auth, "__token")
 	delete(auth, "__type")
@@ -212,7 +212,7 @@ func (b *redisBackend) DeleteSession(token string) error {
 	return err
 }
 
-func (b *redisBackend) GetSession(token string) (clientMessage, error) {
+func (b *redisBackend) GetSession(token string) (ClientMessage, error) {
 	conn := b.conn.Get()
 	defer conn.Close()
 
@@ -221,7 +221,7 @@ func (b *redisBackend) GetSession(token string) (clientMessage, error) {
 		return nil, err
 	}
 
-	data := clientMessage{}
+	data := ClientMessage{}
 	err = json.Unmarshal(s, &data)
 	if err != nil {
 		return nil, err
@@ -326,7 +326,7 @@ func (b *redisBackend) LongpollPing(token string) error {
 	return nil
 }
 
-func (b *redisBackend) LongpollBacklog(token string, m clientMessage) error {
+func (b *redisBackend) LongpollBacklog(token string, m ClientMessage) error {
 	conn := b.conn.Get()
 	defer conn.Close()
 
@@ -361,7 +361,7 @@ func (b *redisBackend) LongpollTransfer(token string, seq string) error {
 	return nil
 }
 
-func (b *redisBackend) LongpollGetBacklog(token string, result chan clientMessage) {
+func (b *redisBackend) LongpollGetBacklog(token string, result chan ClientMessage) {
 	conn := b.conn.Get()
 	defer conn.Close()
 
@@ -372,7 +372,7 @@ func (b *redisBackend) LongpollGetBacklog(token string, result chan clientMessag
 			return
 		}
 
-		data := clientMessage{}
+		data := ClientMessage{}
 		err = json.Unmarshal(s, &data)
 		if err != nil {
 			return

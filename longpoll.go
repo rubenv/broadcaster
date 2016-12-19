@@ -13,10 +13,10 @@ import (
 type longpollConnection struct {
 	Token    string
 	Server   *Server
-	AuthData clientMessage
+	AuthData ClientMessage
 
 	combining bool
-	messages  chan clientMessage
+	messages  chan ClientMessage
 	deadline  <-chan time.Time
 
 	subscribe   chan string
@@ -25,7 +25,7 @@ type longpollConnection struct {
 }
 
 func handleLongpollConnection(w http.ResponseWriter, r *http.Request, s *Server) error {
-	m := clientMessage{}
+	m := ClientMessage{}
 	json.NewDecoder(r.Body).Decode(&m)
 
 	redis := s.redis
@@ -67,7 +67,7 @@ func handleLongpollConnection(w http.ResponseWriter, r *http.Request, s *Server)
 
 			channel := m.Channel()
 			if s.CanSubscribe != nil && !s.CanSubscribe(auth, channel) {
-				longpollReply(w, clientMessage{
+				longpollReply(w, ClientMessage{
 					"__type":  SubscribeErrorMessage,
 					"channel": channel,
 					"reason":  "Channel refused",
@@ -101,17 +101,17 @@ func handleLongpollConnection(w http.ResponseWriter, r *http.Request, s *Server)
 	return nil
 }
 
-func (c *longpollConnection) handshake(w http.ResponseWriter, r *http.Request, auth clientMessage) error {
+func (c *longpollConnection) handshake(w http.ResponseWriter, r *http.Request, auth ClientMessage) error {
 	// Expect auth packet first.
 	if auth.Type() != AuthMessage {
 		w.WriteHeader(401)
-		longpollReply(w, clientMessage{"__type": AuthFailedMessage, "reason": "Auth expected"})
+		longpollReply(w, ClientMessage{"__type": AuthFailedMessage, "reason": "Auth expected"})
 		return nil
 	}
 
 	if c.Server.CanConnect != nil && !c.Server.CanConnect(auth) {
 		w.WriteHeader(401)
-		longpollReply(w, clientMessage{"__type": AuthFailedMessage, "reason": "Unauthorized"})
+		longpollReply(w, ClientMessage{"__type": AuthFailedMessage, "reason": "Unauthorized"})
 		return nil
 	}
 
@@ -121,7 +121,7 @@ func (c *longpollConnection) handshake(w http.ResponseWriter, r *http.Request, a
 		return err
 	}
 
-	longpollReply(w, clientMessage{"__type": AuthOKMessage, "__token": c.Token})
+	longpollReply(w, ClientMessage{"__type": AuthOKMessage, "__token": c.Token})
 
 	return nil
 }
@@ -134,7 +134,7 @@ func (c *longpollConnection) poll(w http.ResponseWriter, seq string) error {
 	}
 
 	c.deadline = time.After(c.Server.Timeout - c.Server.PollTime)
-	c.messages = make(chan clientMessage, 10)
+	c.messages = make(chan ClientMessage, 10)
 	c.subscribe = make(chan string, 1)
 	c.unsubscribe = make(chan string, 1)
 	c.transfer = make(chan string, 1)
@@ -171,8 +171,8 @@ func (c *longpollConnection) poll(w http.ResponseWriter, seq string) error {
 	//
 	// Also handles notifications of (un)subscription which may have happend
 	// while waiting.
-	messages := []clientMessage{}
-	transferred := c.listen(seq, func(m clientMessage) {
+	messages := []ClientMessage{}
+	transferred := c.listen(seq, func(m ClientMessage) {
 		if !c.combining {
 			c.deadline = time.After(c.Server.PollTime)
 			c.combining = true
@@ -190,7 +190,7 @@ func (c *longpollConnection) poll(w http.ResponseWriter, seq string) error {
 		// Listens for new messages until a new client connects. This ensures we
 		// don't lose any messages
 		c.deadline = time.After(c.Server.Timeout)
-		c.listen(seq, func(m clientMessage) {
+		c.listen(seq, func(m ClientMessage) {
 			redis.LongpollBacklog(c.Token, m)
 		})
 		hub.Disconnect(c)
@@ -199,7 +199,7 @@ func (c *longpollConnection) poll(w http.ResponseWriter, seq string) error {
 	return nil
 }
 
-func (c *longpollConnection) listen(seq string, onMessage func(m clientMessage)) bool {
+func (c *longpollConnection) listen(seq string, onMessage func(m ClientMessage)) bool {
 	hub := c.Server.hub
 
 	for {
@@ -220,7 +220,7 @@ func (c *longpollConnection) listen(seq string, onMessage func(m clientMessage))
 	}
 }
 
-func longpollReply(w http.ResponseWriter, m ...clientMessage) {
+func longpollReply(w http.ResponseWriter, m ...ClientMessage) {
 	json.NewEncoder(w).Encode(m)
 }
 
@@ -247,7 +247,7 @@ func (c *longpollConnection) GetToken() string {
 type longpollClientTransport struct {
 	running    bool
 	client     *Client
-	messages   chan clientMessage
+	messages   chan ClientMessage
 	err        error
 	token      string
 	httpClient http.Client
@@ -258,22 +258,22 @@ type longpollClientTransport struct {
 func newlongpollClientTransport(c *Client) *longpollClientTransport {
 	return &longpollClientTransport{
 		client:   c,
-		messages: make(chan clientMessage, 10),
+		messages: make(chan ClientMessage, 10),
 		httpClient: http.Client{
 			Transport: http.DefaultTransport,
 		},
 	}
 }
 
-func (t *longpollClientTransport) Connect(authData clientMessage) error {
+func (t *longpollClientTransport) Connect(authData ClientMessage) error {
 	data := authData
 	if data == nil {
-		data = make(clientMessage)
+		data = make(ClientMessage)
 	}
 	data["__type"] = AuthMessage
 
 	if t.client.skip_auth {
-		data = clientMessage{}
+		data = ClientMessage{}
 	}
 
 	return t.Send(data)
@@ -289,7 +289,7 @@ func (t *longpollClientTransport) Close() error {
 	return nil
 }
 
-func (t *longpollClientTransport) Send(data clientMessage) error {
+func (t *longpollClientTransport) Send(data ClientMessage) error {
 	data["__token"] = t.token
 
 	buf, err := json.Marshal(data)
@@ -304,7 +304,7 @@ func (t *longpollClientTransport) Send(data clientMessage) error {
 	}
 	defer resp.Body.Close()
 
-	result := []clientMessage{}
+	result := []ClientMessage{}
 	json.NewDecoder(resp.Body).Decode(&result)
 	for _, v := range result {
 		t.messages <- v
@@ -312,7 +312,7 @@ func (t *longpollClientTransport) Send(data clientMessage) error {
 	return nil
 }
 
-func (t *longpollClientTransport) Receive() (clientMessage, error) {
+func (t *longpollClientTransport) Receive() (ClientMessage, error) {
 	m, ok := <-t.messages
 	if !ok {
 		return nil, t.err
@@ -329,7 +329,7 @@ func (t *longpollClientTransport) onConnect() {
 }
 
 func (t *longpollClientTransport) poll() {
-	data := clientMessage{
+	data := ClientMessage{
 		"__type":  PollMessage,
 		"__token": t.token,
 		"seq":     strconv.Itoa(t.call),
@@ -359,7 +359,7 @@ func (t *longpollClientTransport) poll() {
 			continue
 		}
 
-		result := []clientMessage{}
+		result := []ClientMessage{}
 		json.NewDecoder(resp.Body).Decode(&result)
 		for _, v := range result {
 			t.messages <- v

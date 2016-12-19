@@ -47,9 +47,9 @@ const (
 	ServerErrorMessage = "serverError"
 )
 
-type clientMessage map[string]interface{}
+type ClientMessage map[string]interface{}
 
-func (c clientMessage) ResultId() string {
+func (c ClientMessage) ResultId() string {
 	t := c.Type()
 	if t == SubscribeOKMessage || t == SubscribeErrorMessage {
 		t = SubscribeMessage
@@ -60,7 +60,7 @@ func (c clientMessage) ResultId() string {
 	return fmt.Sprintf("%s_%s", t, c["channel"])
 }
 
-func (c clientMessage) Type() string {
+func (c ClientMessage) Type() string {
 	s, ok := c["__type"].(string)
 	if !ok {
 		return ""
@@ -68,7 +68,7 @@ func (c clientMessage) Type() string {
 	return s
 }
 
-func (c clientMessage) Token() string {
+func (c ClientMessage) Token() string {
 	s, ok := c["__token"].(string)
 	if !ok {
 		return ""
@@ -76,7 +76,7 @@ func (c clientMessage) Token() string {
 	return s
 }
 
-func (c clientMessage) Channel() string {
+func (c ClientMessage) Channel() string {
 	s, ok := c["channel"].(string)
 	if !ok {
 		return ""
@@ -84,36 +84,36 @@ func (c clientMessage) Channel() string {
 	return s
 }
 
-func newMessage(t string) clientMessage {
-	return clientMessage{
+func newMessage(t string) ClientMessage {
+	return ClientMessage{
 		"__type": t,
 	}
 }
 
-func newErrorMessage(t string, err error) clientMessage {
-	return clientMessage{
+func newErrorMessage(t string, err error) ClientMessage {
+	return ClientMessage{
 		"__type": t,
 		"reason": err.Error(),
 	}
 }
 
-func newChannelMessage(t, channel string) clientMessage {
-	return clientMessage{
+func newChannelMessage(t, channel string) ClientMessage {
+	return ClientMessage{
 		"__type":  t,
 		"channel": channel,
 	}
 }
 
-func newBroadcastMessage(channel, body string) clientMessage {
-	return clientMessage{
+func newBroadcastMessage(channel, body string) ClientMessage {
+	return ClientMessage{
 		"__type":  MessageMessage,
 		"channel": channel,
 		"body":    body,
 	}
 }
 
-func newChannelErrorMessage(t, channel string, err error) clientMessage {
-	return clientMessage{
+func newChannelErrorMessage(t, channel string, err error) ClientMessage {
+	return ClientMessage{
 		"__type":  t,
 		"channel": channel,
 		"reason":  err.Error(),

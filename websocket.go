@@ -14,7 +14,7 @@ type websocketConnection struct {
 	Token    string
 	Conn     *websocket.Conn
 	Server   *Server
-	AuthData clientMessage
+	AuthData ClientMessage
 }
 
 func newWebsocketConnection(w http.ResponseWriter, r *http.Request, s *Server) {
@@ -89,7 +89,7 @@ func (c *websocketConnection) Run() {
 	conn := c.Conn
 	hub := c.Server.hub
 
-	m := clientMessage{}
+	m := ClientMessage{}
 	for {
 		err := conn.ReadJSON(&m)
 		if err != nil {
@@ -174,7 +174,7 @@ type websocketClientTransport struct {
 	client *Client
 }
 
-func (t *websocketClientTransport) Connect(authData clientMessage) error {
+func (t *websocketClientTransport) Connect(authData ClientMessage) error {
 	conn, _, err := websocket.DefaultDialer.Dial(t.client.url(ClientModeWebsocket), nil)
 	if err != nil {
 		return err
@@ -186,7 +186,7 @@ func (t *websocketClientTransport) Connect(authData clientMessage) error {
 	if !t.client.skip_auth {
 		data := authData
 		if data == nil {
-			data = make(clientMessage)
+			data = make(ClientMessage)
 		}
 		data["__type"] = AuthMessage
 		err := t.Send(data)
@@ -204,12 +204,12 @@ func (t *websocketClientTransport) Close() error {
 	return t.conn.Close()
 }
 
-func (t *websocketClientTransport) Send(data clientMessage) error {
+func (t *websocketClientTransport) Send(data ClientMessage) error {
 	return t.conn.WriteJSON(data)
 }
 
-func (t *websocketClientTransport) Receive() (clientMessage, error) {
-	m := clientMessage{}
+func (t *websocketClientTransport) Receive() (ClientMessage, error) {
+	m := ClientMessage{}
 	err := t.conn.ReadJSON(&m)
 	return m, err
 }
