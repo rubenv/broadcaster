@@ -307,7 +307,10 @@ func (t *longpollClientTransport) Send(data ClientMessage) error {
 	defer resp.Body.Close()
 
 	result := []ClientMessage{}
-	json.NewDecoder(resp.Body).Decode(&result)
+	err = json.NewDecoder(resp.Body).Decode(&result)
+	if err != nil {
+		return err
+	}
 	for _, v := range result {
 		t.messages <- v
 	}
