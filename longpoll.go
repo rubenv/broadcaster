@@ -3,6 +3,7 @@ package broadcaster
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"net/http"
 	"strconv"
 	"time"
@@ -286,6 +287,7 @@ func (t *longpollClientTransport) Close() error {
 			transport.CancelRequest(t.httpReq)
 		}
 	}
+	t.err = io.EOF
 	return nil
 }
 
