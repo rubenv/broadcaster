@@ -37,6 +37,9 @@ type Client struct {
 	// Timeout
 	Timeout time.Duration
 
+	// Ping interval
+	PingInterval time.Duration
+
 	// Reconnection attempts
 	MaxAttempts int
 
@@ -67,6 +70,7 @@ func NewClient(urlStr string) (*Client, error) {
 		path:         u.Path,
 		secure:       u.Scheme == "https",
 		Timeout:      30 * time.Second,
+		PingInterval: 30 * time.Second,
 		MaxAttempts:  10,
 		channels:     make(map[string]bool),
 		Messages:     make(messageChan, 10),

@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/pborman/uuid"
 
@@ -170,8 +171,9 @@ func (c *websocketConnection) GetToken() string {
 
 // Client transport
 type websocketClientTransport struct {
-	conn   *websocket.Conn
-	client *Client
+	conn    *websocket.Conn
+	client  *Client
+	running bool
 }
 
 func (t *websocketClientTransport) Connect(authData ClientMessage) error {
@@ -194,10 +196,23 @@ func (t *websocketClientTransport) Connect(authData ClientMessage) error {
 			return err
 		}
 	}
+
+	t.running = true
+	go func() {
+		for {
+			time.Sleep(t.client.PingInterval)
+			if !t.running {
+				return
+			}
+			t.Send(newMessage(PingMessage))
+		}
+	}()
+
 	return nil
 }
 
 func (t *websocketClientTransport) Close() error {
+	t.running = false
 	if t.conn == nil {
 		return nil
 	}
