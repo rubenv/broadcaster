@@ -3,6 +3,7 @@ package broadcaster
 import (
 	"errors"
 	"strings"
+	"sync"
 
 	"github.com/garyburd/redigo/redis"
 )
@@ -35,6 +36,8 @@ type hub struct {
 
 	newSubscriptions   chan subscriptionRequest
 	newUnsubscriptions chan subscriptionRequest
+
+	sync.Mutex
 }
 
 func (h *hub) Prepare() error {
@@ -70,6 +73,9 @@ func (h *hub) Stop() {
 }
 
 func (h *hub) Connect(conn connection) error {
+	h.Lock()
+	defer h.Unlock()
+
 	h.subscriptions[conn] = make(map[string]bool)
 	h.connections[conn.GetToken()] = conn
 	return nil
@@ -108,6 +114,9 @@ func (h *hub) Subscribe(conn connection, channel string) error {
 }
 
 func (h *hub) handleSubscribe(r subscriptionRequest) {
+	h.Lock()
+	defer h.Unlock()
+
 	if _, ok := h.channels[r.Channel]; !ok {
 		// New channel! Try to connect to Redis first
 		err := h.redis.Subscribe(r.Channel)
