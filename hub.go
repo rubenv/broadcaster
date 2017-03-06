@@ -82,25 +82,52 @@ func (h *hub) Connect(conn connection) error {
 }
 
 func (h *hub) Disconnect(conn connection) error {
-	if _, ok := h.subscriptions[conn]; !ok {
+	if !h.hasConnection(conn) {
 		return errors.New("Unknown connection")
 	}
 
+	h.Lock()
+	channels := h.subscriptions[conn]
+	h.Unlock()
+
 	// Unsubscribe from all channels
-	for channel, _ := range h.subscriptions[conn] {
+	for channel, _ := range channels {
 		err := h.Unsubscribe(conn, channel)
 		if err != nil {
 			return err
 		}
 	}
 
+	h.Lock()
+	defer h.Unlock()
 	delete(h.subscriptions, conn)
 	delete(h.connections, conn.GetToken())
 	return nil
 }
 
+func (h *hub) hasConnection(conn connection) bool {
+	h.Lock()
+	defer h.Unlock()
+
+	_, ok := h.subscriptions[conn]
+	return ok
+}
+
+func (h *hub) hasSubscription(conn connection, channel string) bool {
+	h.Lock()
+	defer h.Unlock()
+
+	s, ok := h.subscriptions[conn]
+	if !ok {
+		return false
+	}
+
+	_, ok = s[channel]
+	return ok
+}
+
 func (h *hub) Subscribe(conn connection, channel string) error {
-	if _, ok := h.subscriptions[conn]; !ok {
+	if !h.hasConnection(conn) {
 		return errors.New("Unknown connection")
 	}
 
@@ -134,10 +161,10 @@ func (h *hub) handleSubscribe(r subscriptionRequest) {
 }
 
 func (h *hub) Unsubscribe(conn connection, channel string) error {
-	if _, ok := h.subscriptions[conn]; !ok {
+	if !h.hasConnection(conn) {
 		return errors.New("Unknown connection")
 	}
-	if _, ok := h.subscriptions[conn][channel]; !ok {
+	if !h.hasSubscription(conn, channel) {
 		// Some clients seem to be sending double unsubscribes,
 		// ignore those for now:
 		//return fmt.Errorf("Not subscribed to channel %s", channel)
@@ -154,6 +181,9 @@ func (h *hub) Unsubscribe(conn connection, channel string) error {
 }
 
 func (h *hub) handleUnsubscribe(r subscriptionRequest) {
+	h.Lock()
+	defer h.Unlock()
+
 	delete(h.subscriptions[r.Connection], r.Channel)
 	delete(h.channels[r.Channel], r.Connection)
 
@@ -178,6 +208,9 @@ func (h *hub) processClient(t, token string, args []string) {
 }
 
 func (h *hub) handleMessage(m redis.Message) {
+	h.Lock()
+	defer h.Unlock()
+
 	if m.Channel == h.redis.controlChannel {
 		args := strings.Split(string(m.Data), " ")
 		switch args[0] {
@@ -204,6 +237,9 @@ type hubStats struct {
 }
 
 func (h *hub) Stats() (hubStats, error) {
+	h.Lock()
+	defer h.Unlock()
+
 	subscriptions := make(map[string]int)
 	for k, v := range h.channels {
 		subscriptions[k] = len(v)
