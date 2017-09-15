@@ -358,14 +358,17 @@ func (t *longpollClientTransport) poll() {
 			t.client.disconnected()
 			continue
 		}
-		defer resp.Body.Close()
 
 		if !t.running {
 			continue
 		}
 
 		result := []ClientMessage{}
-		json.NewDecoder(resp.Body).Decode(&result)
+		err = json.NewDecoder(resp.Body).Decode(&result)
+		resp.Body.Close()
+		if err != nil {
+			continue
+		}
 		for _, v := range result {
 			t.messages <- v
 		}
