@@ -11,5 +11,6 @@ services:
 
 script:
     - go test -v -bench=.
+    - go test -v -race
     - cat /tmp/broadcaster-redis-server.log
     - cat /tmp/broadcaster-redis.log
