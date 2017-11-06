@@ -341,39 +341,51 @@ func (t *longpollClientTransport) poll() {
 	}
 	t.call++
 
-	buf, _ := json.Marshal(data)
+	buf, err := json.Marshal(data)
+	if err != nil {
+		return
+	}
 
 	for t.running {
-		url := t.client.url(ClientModeLongPoll)
-		req, err := http.NewRequest("POST", url, bytes.NewBuffer(buf))
-		if err != nil {
-			t.client.disconnected()
-			continue
-		}
-
-		t.httpReq = req
-		t.httpReq.Header.Set("Content-Type", "application/json")
-		resp, err := t.httpClient.Do(t.httpReq)
-		if err != nil || resp.StatusCode != 200 {
-			t.client.disconnected()
-			continue
-		}
-
-		if !t.running {
-			continue
-		}
-
-		result := []ClientMessage{}
-		err = json.NewDecoder(resp.Body).Decode(&result)
-		resp.Body.Close()
-		if err != nil {
-			continue
-		}
-		for _, v := range result {
-			t.messages <- v
-		}
+		t.pollOnce(buf)
 	}
 
 	t.httpReq = nil
 	close(t.messages)
+}
+
+func (t *longpollClientTransport) pollOnce(buf []byte) {
+	url := t.client.url(ClientModeLongPoll)
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(buf))
+	if err != nil {
+		t.client.disconnected()
+		return
+	}
+
+	t.httpReq = req
+	t.httpReq.Header.Set("Content-Type", "application/json")
+	resp, err := t.httpClient.Do(t.httpReq)
+	if err != nil {
+		t.client.disconnected()
+		return
+	}
+
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		t.client.disconnected()
+		return
+	}
+
+	if !t.running {
+		return
+	}
+
+	result := []ClientMessage{}
+	err = json.NewDecoder(resp.Body).Decode(&result)
+	if err != nil {
+		return
+	}
+	for _, v := range result {
+		t.messages <- v
+	}
 }
