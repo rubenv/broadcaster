@@ -65,7 +65,7 @@ func newRedisBackend(redisHost, pubSubHost, controlChannel, prefix string, timeo
 				return conn, err
 			},
 			TestOnBorrow: func(c redis.Conn, t time.Time) error {
-				if time.Now().Sub(t) > redisPingInterval {
+				if time.Since(t) > redisPingInterval {
 					_, err := c.Do("PING")
 					return err
 				}
@@ -272,11 +272,7 @@ func (b *redisBackend) LongpollSubscribe(token, channel string) error {
 	conn.Send("EXPIRE", key, b.timeout)
 	conn.Send("PUBLISH", b.controlChannel, fmt.Sprintf("subscribe %s %s", token, channel))
 	_, err := conn.Do("EXEC")
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return err
 }
 
 // Records channel unsubscription and broadcasts it to listeners
@@ -289,11 +285,7 @@ func (b *redisBackend) LongpollUnsubscribe(token, channel string) error {
 	conn.Send("HDEL", key, channel)
 	conn.Send("PUBLISH", b.controlChannel, fmt.Sprintf("unsubscribe %s %s", token, channel))
 	_, err := conn.Do("EXEC")
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return err
 }
 
 func (b *redisBackend) LongpollGetChannels(token string) ([]string, error) {
@@ -302,11 +294,7 @@ func (b *redisBackend) LongpollGetChannels(token string) ([]string, error) {
 
 	key := b.key("channels:%s", token)
 
-	c, err := redis.Strings(conn.Do("HKEYS", key))
-	if err != nil {
-		return nil, err
-	}
-	return c, err
+	return redis.Strings(conn.Do("HKEYS", key))
 }
 
 func (b *redisBackend) LongpollPing(token string) error {
@@ -319,11 +307,7 @@ func (b *redisBackend) LongpollPing(token string) error {
 	conn.Send("EXPIRE", b.key("channels:%s", token), b.timeout*2)
 	conn.Send("EXPIRE", b.key("sess:%s", token), b.timeout*2)
 	_, err := conn.Do("EXEC")
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return err
 }
 
 func (b *redisBackend) LongpollBacklog(token string, m ClientMessage) error {
@@ -342,11 +326,7 @@ func (b *redisBackend) LongpollBacklog(token string, m ClientMessage) error {
 	conn.Send("RPUSH", key, data)
 	conn.Send("EXPIRE", key, b.timeout)
 	_, err = conn.Do("EXEC")
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return err
 }
 
 func (b *redisBackend) LongpollTransfer(token string, seq string) error {
@@ -354,11 +334,7 @@ func (b *redisBackend) LongpollTransfer(token string, seq string) error {
 	defer conn.Close()
 
 	_, err := conn.Do("PUBLISH", b.controlChannel, fmt.Sprintf("transfer %s %s", token, seq))
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return err
 }
 
 func (b *redisBackend) LongpollGetBacklog(token string, result chan ClientMessage) {

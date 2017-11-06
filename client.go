@@ -74,7 +74,7 @@ func NewClient(urlStr string) (*Client, error) {
 		MaxAttempts:  10,
 		channels:     make(map[string]bool),
 		Messages:     make(messageChan, 10),
-		Disconnected: make(chan bool, 0),
+		Disconnected: make(chan bool),
 	}, nil
 }
 

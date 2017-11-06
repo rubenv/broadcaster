@@ -127,7 +127,6 @@ func (c *websocketConnection) Run() {
 
 		default:
 			conn.WriteJSON(newMessage(UnknownMessage))
-			break
 		}
 	}
 }
