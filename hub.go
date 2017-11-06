@@ -87,11 +87,14 @@ func (h *hub) Disconnect(conn connection) error {
 	}
 
 	h.Lock()
-	channels := h.subscriptions[conn]
+	channels := make([]string, 0)
+	for channel, _ := range h.subscriptions[conn] {
+		channels = append(channels, channel)
+	}
 	h.Unlock()
 
 	// Unsubscribe from all channels
-	for channel, _ := range channels {
+	for _, channel := range channels {
 		err := h.Unsubscribe(conn, channel)
 		if err != nil {
 			return err
