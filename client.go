@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"sync"
 	"time"
 )
 
@@ -52,11 +53,15 @@ type Client struct {
 	skip_auth bool
 
 	// Internal bits
-	transport         clientTransport
-	results           map[string]messageChan
-	should_disconnect bool
-	attempts          int
-	channels          map[string]bool
+	transport              clientTransport
+	results                map[string]messageChan
+	should_disconnect_lock sync.Mutex
+	should_disconnect      bool
+	attempts               int
+	channels               map[string]bool
+
+	disconnect_lock sync.Mutex
+	disconnect_done bool
 }
 
 func NewClient(urlStr string) (*Client, error) {
@@ -93,7 +98,9 @@ func (c *Client) url(mode ClientMode) string {
 }
 
 func (c *Client) Connect() error {
+	c.should_disconnect_lock.Lock()
 	c.should_disconnect = false
+	c.should_disconnect_lock.Unlock()
 
 	if c.Mode == ClientModeAuto || c.Mode == ClientModeWebsocket {
 		c.transport = &websocketClientTransport{client: c}
@@ -145,7 +152,17 @@ func (c *Client) Connect() error {
 }
 
 func (c *Client) Disconnect() error {
+	c.should_disconnect_lock.Lock()
 	c.should_disconnect = true
+	c.should_disconnect_lock.Unlock()
+
+	c.disconnect_lock.Lock()
+	defer c.disconnect_lock.Unlock()
+
+	if c.disconnect_done {
+		return nil
+	}
+
 	err := c.transport.Close()
 	if err != nil && c.Error == nil {
 		c.Error = err
@@ -154,11 +171,16 @@ func (c *Client) Disconnect() error {
 		close(r)
 	}
 	close(c.Messages)
+	c.disconnect_done = true
+
 	return c.Error
 }
 
 func (c *Client) disconnected() {
-	if c.should_disconnect {
+	c.should_disconnect_lock.Lock()
+	should_disconnect := c.should_disconnect
+	c.should_disconnect_lock.Unlock()
+	if should_disconnect {
 		return
 	}
 

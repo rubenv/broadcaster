@@ -109,7 +109,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method == "GET" {
 		if r.URL.Path == "/health" {
-			if !s.redis.listening {
+			if !s.redis.IsListening() {
 				http.Error(w, "No connection to redis", http.StatusServiceUnavailable)
 			}
 		} else {

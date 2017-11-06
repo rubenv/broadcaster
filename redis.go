@@ -20,6 +20,7 @@ type redisBackend struct {
 	timeout        int
 	controlChannel string
 	listening      bool
+	listeningLock  sync.Mutex
 	controlWait    sync.WaitGroup
 
 	dialRetrier *retrier.Retrier
@@ -81,6 +82,7 @@ func newRedisBackend(redisHost, pubSubHost, controlChannel, prefix string, timeo
 		subscriptions:  make(map[string]bool),
 		Messages:       make(chan redis.Message, 250),
 	}
+	b.controlWait.Add(1)
 
 	go b.listen()
 
@@ -100,9 +102,9 @@ func (b *redisBackend) listen() {
 }
 
 func (b *redisBackend) connect() error {
+	b.listeningLock.Lock()
 	b.listening = false
-	b.controlWait.Add(1)
-	defer b.controlWait.Done()
+	b.listeningLock.Unlock()
 
 	var p redis.Conn
 	err := b.dialRetrier.Run(func() error {
@@ -135,7 +137,10 @@ func (b *redisBackend) connect() error {
 		}
 	}
 
+	b.listeningLock.Lock()
 	b.listening = true
+	b.listeningLock.Unlock()
+	b.controlWait.Done()
 	return nil
 }
 
@@ -242,9 +247,7 @@ func (b *redisBackend) IsConnected(token string) (bool, error) {
 }
 
 func (b *redisBackend) Subscribe(channel string) error {
-	for !b.listening {
-		b.controlWait.Wait()
-	}
+	b.controlWait.Wait()
 	b.subscriptionsLock.Lock()
 	defer b.subscriptionsLock.Unlock()
 	b.subscriptions[channel] = true
@@ -252,9 +255,7 @@ func (b *redisBackend) Subscribe(channel string) error {
 }
 
 func (b *redisBackend) Unsubscribe(channel string) error {
-	for !b.listening {
-		b.controlWait.Wait()
-	}
+	b.controlWait.Wait()
 	b.subscriptionsLock.Lock()
 	defer b.subscriptionsLock.Unlock()
 	delete(b.subscriptions, channel)
@@ -358,4 +359,10 @@ func (b *redisBackend) LongpollGetBacklog(token string, result chan ClientMessag
 
 		result <- data
 	}
+}
+
+func (b *redisBackend) IsListening() bool {
+	b.listeningLock.Lock()
+	defer b.listeningLock.Unlock()
+	return b.listening
 }
