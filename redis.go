@@ -82,7 +82,6 @@ func newRedisBackend(redisHost, pubSubHost, controlChannel, prefix string, timeo
 		subscriptions:  make(map[string]bool),
 		Messages:       make(chan redis.Message, 250),
 	}
-	b.controlWait.Add(1)
 
 	go b.listen()
 
@@ -105,6 +104,7 @@ func (b *redisBackend) connect() error {
 	b.listeningLock.Lock()
 	b.listening = false
 	b.listeningLock.Unlock()
+	b.controlWait.Add(1)
 
 	var p redis.Conn
 	err := b.dialRetrier.Run(func() error {
