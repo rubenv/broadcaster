@@ -203,6 +203,7 @@ func newWSClient(s *testServer, conf ...func(c *Client)) (*Client, error) {
 		return nil, err
 	}
 	client.Mode = ClientModeWebsocket
+	client.UserAgent = "test"
 
 	for _, v := range conf {
 		v(client)
@@ -223,6 +224,7 @@ func newLPClient(s *testServer, conf ...func(c *Client)) (*Client, error) {
 		return nil, err
 	}
 	client.Mode = ClientModeLongPoll
+	client.UserAgent = "test"
 
 	for _, v := range conf {
 		v(client)

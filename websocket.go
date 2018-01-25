@@ -176,7 +176,12 @@ type websocketClientTransport struct {
 }
 
 func (t *websocketClientTransport) Connect(authData ClientMessage) error {
-	conn, _, err := websocket.DefaultDialer.Dial(t.client.url(ClientModeWebsocket), nil)
+	var header http.Header = nil
+	if t.client.UserAgent != "" {
+		header = make(http.Header)
+		header.Set("User-Agent", t.client.UserAgent)
+	}
+	conn, _, err := websocket.DefaultDialer.Dial(t.client.url(ClientModeWebsocket), header)
 	if err != nil {
 		return err
 	}

@@ -46,6 +46,9 @@ type Client struct {
 	// Reconnection attempts
 	MaxAttempts int
 
+	// Can be overwritten
+	UserAgent string
+
 	// Connection params
 	host   string
 	path   string

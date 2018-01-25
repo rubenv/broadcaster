@@ -302,7 +302,13 @@ func (t *longpollClientTransport) Send(data ClientMessage) error {
 	}
 
 	url := t.client.url(ClientModeLongPoll)
-	resp, err := t.httpClient.Post(url, "application/json", bytes.NewBuffer(buf))
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(buf))
+	req.Header.Set("Content-Type", "application/json")
+	if t.client.UserAgent != "" {
+		req.Header.Set("User-Agent", t.client.UserAgent)
+	}
+
+	resp, err := t.httpClient.Do(req)
 	if err != nil {
 		return err
 	}
@@ -374,6 +380,10 @@ func (t *longpollClientTransport) pollOnce(buf []byte) {
 
 	t.httpReq = req
 	t.httpReq.Header.Set("Content-Type", "application/json")
+	if t.client.UserAgent != "" {
+		t.httpReq.Header.Set("User-Agent", t.client.UserAgent)
+	}
+
 	resp, err := t.httpClient.Do(t.httpReq)
 	if err != nil {
 		t.client.disconnected()
