@@ -3,7 +3,9 @@ package broadcaster
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"strconv"
 	"time"
@@ -305,6 +307,14 @@ func (t *longpollClientTransport) Send(data ClientMessage) error {
 		return err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusUnauthorized {
+		body, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("Non OK status code: %d, failed to read body: %s", resp.StatusCode, err)
+		}
+
+		return fmt.Errorf("Non OK status code: %d -> %s", resp.StatusCode, string(body))
+	}
 
 	result := []ClientMessage{}
 	err = json.NewDecoder(resp.Body).Decode(&result)
@@ -371,7 +381,7 @@ func (t *longpollClientTransport) pollOnce(buf []byte) {
 	}
 
 	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusUnauthorized {
 		t.client.disconnected()
 		return
 	}

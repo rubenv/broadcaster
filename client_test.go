@@ -3,9 +3,9 @@ package broadcaster
 import (
 	"testing"
 	"time"
-)
 
-import _ "net/http/pprof"
+	_ "net/http/pprof"
+)
 
 func init() {
 	//runtime.GOMAXPROCS(runtime.NumCPU())
