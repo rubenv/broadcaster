@@ -4,9 +4,11 @@ import (
 	"encoding/binary"
 	"errors"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/pborman/uuid"
+	"github.com/uber-go/atomic"
 
 	"github.com/gorilla/websocket"
 )
@@ -16,6 +18,9 @@ type websocketConnection struct {
 	Conn     *websocket.Conn
 	Server   *Server
 	AuthData ClientMessage
+
+	write_lock sync.Mutex
+	read_lock  sync.Mutex
 }
 
 func newWebsocketConnection(w http.ResponseWriter, r *http.Request, s *Server) {
@@ -34,6 +39,18 @@ func newWebsocketConnection(w http.ResponseWriter, r *http.Request, s *Server) {
 	}
 }
 
+func (c *websocketConnection) writeConn(msg ClientMessage) error {
+	c.write_lock.Lock()
+	defer c.write_lock.Unlock()
+	return c.Conn.WriteJSON(msg)
+}
+
+func (c *websocketConnection) readConn(v interface{}) error {
+	c.read_lock.Lock()
+	defer c.read_lock.Unlock()
+	return c.Conn.ReadJSON(v)
+}
+
 func (c *websocketConnection) handshake(w http.ResponseWriter, r *http.Request) error {
 	conn, err := c.Server.Upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -42,7 +59,7 @@ func (c *websocketConnection) handshake(w http.ResponseWriter, r *http.Request) 
 	}
 	c.Conn = conn
 
-	err = conn.ReadJSON(&c.AuthData)
+	err = c.readConn(&c.AuthData)
 	if err != nil {
 		c.Close(400, err.Error())
 		return nil
@@ -50,13 +67,13 @@ func (c *websocketConnection) handshake(w http.ResponseWriter, r *http.Request) 
 
 	// Expect auth packet first.
 	if c.AuthData.Type() != AuthMessage {
-		conn.WriteJSON(newErrorMessage(AuthFailedMessage, errors.New("Auth expected")))
+		c.writeConn(newErrorMessage(AuthFailedMessage, errors.New("Auth expected")))
 		c.Close(401, "Auth expected")
 		return nil
 	}
 
 	if c.Server.CanConnect != nil && !c.Server.CanConnect(c.AuthData) {
-		conn.WriteJSON(newErrorMessage(AuthFailedMessage, errors.New("Unauthorized")))
+		c.writeConn(newErrorMessage(AuthFailedMessage, errors.New("Unauthorized")))
 		c.Close(401, "Unauthorized")
 		return nil
 	}
@@ -64,14 +81,14 @@ func (c *websocketConnection) handshake(w http.ResponseWriter, r *http.Request) 
 	redis := c.Server.redis
 	err = redis.StoreSession(c.Token, c.AuthData)
 	if err != nil {
-		conn.WriteJSON(newMessage(ServerErrorMessage))
+		c.writeConn(newMessage(ServerErrorMessage))
 		conn.Close()
 		return nil
 	}
 
 	defer c.Cleanup()
 
-	err = conn.WriteJSON(newMessage(AuthOKMessage))
+	err = c.writeConn(newMessage(AuthOKMessage))
 	if err != nil {
 		return err
 	}
@@ -88,12 +105,11 @@ func (c *websocketConnection) handshake(w http.ResponseWriter, r *http.Request) 
 }
 
 func (c *websocketConnection) Run() {
-	conn := c.Conn
 	hub := c.Server.hub
 
 	m := ClientMessage{}
 	for {
-		err := conn.ReadJSON(&m)
+		err := c.readConn(&m)
 		if err != nil {
 			c.Close(400, err.Error())
 			break
@@ -103,15 +119,15 @@ func (c *websocketConnection) Run() {
 		case SubscribeMessage:
 			channel := m.Channel()
 			if c.Server.CanSubscribe != nil && !c.Server.CanSubscribe(c.AuthData, channel) {
-				conn.WriteJSON(newChannelErrorMessage(SubscribeErrorMessage, channel, errors.New("Channel refused")))
+				c.writeConn(newChannelErrorMessage(SubscribeErrorMessage, channel, errors.New("Channel refused")))
 				continue
 			}
 
 			err := hub.Subscribe(c, channel)
 			if err != nil {
-				conn.WriteJSON(newChannelErrorMessage(SubscribeErrorMessage, channel, err))
+				c.writeConn(newChannelErrorMessage(SubscribeErrorMessage, channel, err))
 			} else {
-				conn.WriteJSON(newChannelMessage(SubscribeOKMessage, channel))
+				c.writeConn(newChannelMessage(SubscribeOKMessage, channel))
 			}
 
 		case UnsubscribeMessage:
@@ -119,15 +135,15 @@ func (c *websocketConnection) Run() {
 
 			err := hub.Unsubscribe(c, channel)
 			if err != nil {
-				conn.WriteJSON(newChannelErrorMessage(UnsubscribeErrorMessage, channel, err))
+				c.writeConn(newChannelErrorMessage(UnsubscribeErrorMessage, channel, err))
 			}
-			conn.WriteJSON(newChannelMessage(UnsubscribeOKMessage, channel))
+			c.writeConn(newChannelMessage(UnsubscribeOKMessage, channel))
 
 		case PingMessage:
 			// Do nothing
 
 		default:
-			conn.WriteJSON(newMessage(UnknownMessage))
+			c.writeConn(newMessage(UnknownMessage))
 		}
 	}
 }
@@ -138,12 +154,12 @@ func (c *websocketConnection) Cleanup() {
 
 	err := redis.DeleteSession(c.Token)
 	if err != nil {
-		c.Conn.WriteJSON(newErrorMessage(ServerErrorMessage, err))
+		c.writeConn(newErrorMessage(ServerErrorMessage, err))
 	}
 
 	err = hub.Disconnect(c)
 	if err != nil {
-		c.Conn.WriteJSON(newErrorMessage(ServerErrorMessage, err))
+		c.writeConn(newErrorMessage(ServerErrorMessage, err))
 	}
 
 	c.Conn.Close()
@@ -158,7 +174,7 @@ func (c *websocketConnection) Close(code uint16, msg string) {
 }
 
 func (c *websocketConnection) Send(channel, message string) {
-	c.Conn.WriteJSON(newBroadcastMessage(channel, message))
+	c.writeConn(newBroadcastMessage(channel, message))
 }
 
 func (c *websocketConnection) Process(t string, args []string) {
@@ -171,9 +187,32 @@ func (c *websocketConnection) GetToken() string {
 
 // Client transport
 type websocketClientTransport struct {
-	conn    *websocket.Conn
-	client  *Client
-	running bool
+	conn      *websocket.Conn
+	conn_lock sync.Mutex
+	client    *Client
+	running   *atomic.Bool
+
+	write_lock sync.Mutex
+	read_lock  sync.Mutex
+}
+
+func newWebsocketClientTransport(c *Client) clientTransport {
+	return &websocketClientTransport{
+		running: atomic.NewBool(false),
+		client:  c,
+	}
+}
+
+func (t *websocketClientTransport) writeConn(msg ClientMessage) error {
+	t.write_lock.Lock()
+	defer t.write_lock.Unlock()
+	return t.conn.WriteJSON(msg)
+}
+
+func (t *websocketClientTransport) readConn(v interface{}) error {
+	t.read_lock.Lock()
+	defer t.read_lock.Unlock()
+	return t.conn.ReadJSON(v)
 }
 
 func (t *websocketClientTransport) Connect(authData ClientMessage) error {
@@ -187,7 +226,9 @@ func (t *websocketClientTransport) Connect(authData ClientMessage) error {
 		return err
 	}
 
+	t.conn_lock.Lock()
 	t.conn = conn
+	t.conn_lock.Unlock()
 
 	// Authenticate
 	if !t.client.skip_auth {
@@ -202,11 +243,11 @@ func (t *websocketClientTransport) Connect(authData ClientMessage) error {
 		}
 	}
 
-	t.running = true
+	t.running.Store(true)
 	go func() {
 		for {
 			time.Sleep(t.client.PingInterval)
-			if !t.running {
+			if !t.running.Load() {
 				return
 			}
 			t.Send(newMessage(PingMessage))
@@ -217,7 +258,10 @@ func (t *websocketClientTransport) Connect(authData ClientMessage) error {
 }
 
 func (t *websocketClientTransport) Close() error {
-	t.running = false
+	t.conn_lock.Lock()
+	defer t.conn_lock.Unlock()
+
+	t.running.Store(false)
 	if t.conn == nil {
 		return nil
 	}
@@ -225,12 +269,12 @@ func (t *websocketClientTransport) Close() error {
 }
 
 func (t *websocketClientTransport) Send(data ClientMessage) error {
-	return t.conn.WriteJSON(data)
+	return t.writeConn(data)
 }
 
 func (t *websocketClientTransport) Receive() (ClientMessage, error) {
 	m := ClientMessage{}
-	err := t.conn.ReadJSON(&m)
+	err := t.readConn(&m)
 	return m, err
 }
 

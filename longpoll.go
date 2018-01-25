@@ -250,7 +250,7 @@ func (c *longpollConnection) GetToken() string {
 
 // Client transport
 type longpollClientTransport struct {
-	running      atomic.Bool
+	running      *atomic.Bool
 	client       *Client
 	messages     chan ClientMessage
 	token        string
@@ -263,8 +263,9 @@ type longpollClientTransport struct {
 	err_lock sync.Mutex
 }
 
-func newlongpollClientTransport(c *Client) *longpollClientTransport {
+func newlongpollClientTransport(c *Client) clientTransport {
 	return &longpollClientTransport{
+		running:  atomic.NewBool(false),
 		client:   c,
 		messages: make(chan ClientMessage, 10),
 		httpClient: http.Client{

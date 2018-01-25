@@ -61,7 +61,7 @@ type Client struct {
 	transport         clientTransport
 	results           map[string]messageChan
 	results_lock      sync.Mutex
-	should_disconnect atomic.Bool
+	should_disconnect *atomic.Bool
 	attempts          int
 
 	channels      map[string]bool
@@ -78,16 +78,17 @@ func NewClient(urlStr string) (*Client, error) {
 	}
 
 	return &Client{
-		host:         u.Host,
-		path:         u.Path,
-		secure:       u.Scheme == "https",
-		Timeout:      30 * time.Second,
-		PingInterval: 30 * time.Second,
-		MaxAttempts:  10,
-		channels:     make(map[string]bool),
-		results:      make(map[string]messageChan),
-		Messages:     make(messageChan, 10),
-		Disconnected: make(chan bool),
+		host:              u.Host,
+		path:              u.Path,
+		secure:            u.Scheme == "https",
+		Timeout:           30 * time.Second,
+		PingInterval:      30 * time.Second,
+		MaxAttempts:       10,
+		channels:          make(map[string]bool),
+		results:           make(map[string]messageChan),
+		Messages:          make(messageChan, 10),
+		Disconnected:      make(chan bool),
+		should_disconnect: atomic.NewBool(false),
 	}, nil
 }
 
@@ -109,7 +110,7 @@ func (c *Client) Connect() error {
 	c.should_disconnect.Store(false)
 
 	if c.Mode == ClientModeAuto || c.Mode == ClientModeWebsocket {
-		c.transport = &websocketClientTransport{client: c}
+		c.transport = newWebsocketClientTransport(c)
 		err := c.transport.Connect(c.AuthData)
 		if err != nil {
 			if c.Mode == ClientModeAuto {
