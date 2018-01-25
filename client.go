@@ -62,7 +62,9 @@ type Client struct {
 	results           map[string]messageChan
 	should_disconnect atomic.Bool
 	attempts          int
-	channels          map[string]bool
+
+	channels      map[string]bool
+	channels_lock sync.Mutex
 
 	disconnect_lock sync.Mutex
 	disconnect_done bool
@@ -143,7 +145,14 @@ func (c *Client) Connect() error {
 
 	go c.listen()
 
+	c.channels_lock.Lock()
+	toSubscribe := make([]string, 0)
 	for channel, _ := range c.channels {
+		toSubscribe = append(toSubscribe, channel)
+	}
+	c.channels_lock.Unlock()
+
+	for _, channel := range toSubscribe {
 		err := c.Subscribe(channel)
 		if err != nil {
 			return err
@@ -274,7 +283,10 @@ func (c *Client) Subscribe(channel string) error {
 	if m["channel"] != channel {
 		return fmt.Errorf("Expected channel %s, got %s instead", channel, m["channel"])
 	}
+
+	c.channels_lock.Lock()
 	c.channels[channel] = true
+	c.channels_lock.Unlock()
 	return nil
 }
 
@@ -290,7 +302,10 @@ func (c *Client) Unsubscribe(channel string) error {
 	if m["channel"] != channel {
 		return fmt.Errorf("Expected channel %s, got %s instead", channel, m["channel"])
 	}
+
+	c.channels_lock.Lock()
 	c.channels[channel] = false
+	c.channels_lock.Unlock()
 	return nil
 }
 
