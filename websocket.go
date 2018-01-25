@@ -45,6 +45,7 @@ func (c *websocketConnection) handshake(w http.ResponseWriter, r *http.Request) 
 	err = conn.ReadJSON(&c.AuthData)
 	if err != nil {
 		c.Close(400, err.Error())
+		return nil
 	}
 
 	// Expect auth packet first.
@@ -63,9 +64,9 @@ func (c *websocketConnection) handshake(w http.ResponseWriter, r *http.Request) 
 	redis := c.Server.redis
 	err = redis.StoreSession(c.Token, c.AuthData)
 	if err != nil {
-		return err
 		conn.WriteJSON(newMessage(ServerErrorMessage))
 		conn.Close()
+		return nil
 	}
 
 	defer c.Cleanup()
