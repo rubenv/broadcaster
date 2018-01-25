@@ -60,6 +60,7 @@ type Client struct {
 	// Internal bits
 	transport         clientTransport
 	results           map[string]messageChan
+	results_lock      sync.Mutex
 	should_disconnect atomic.Bool
 	attempts          int
 
@@ -84,6 +85,7 @@ func NewClient(urlStr string) (*Client, error) {
 		PingInterval: 30 * time.Second,
 		MaxAttempts:  10,
 		channels:     make(map[string]bool),
+		results:      make(map[string]messageChan),
 		Messages:     make(messageChan, 10),
 		Disconnected: make(chan bool),
 	}, nil
@@ -176,6 +178,8 @@ func (c *Client) Disconnect() error {
 	if err != nil && c.Error == nil {
 		c.Error = err
 	}
+	c.results_lock.Lock()
+	defer c.results_lock.Unlock()
 	for _, r := range c.results {
 		close(r)
 	}
@@ -221,7 +225,9 @@ func (c *Client) listen() {
 		if m.Type() == MessageMessage {
 			c.Messages <- m
 		} else {
+			c.results_lock.Lock()
 			channel, ok := c.results[m.ResultId()]
+			c.results_lock.Unlock()
 			if !ok {
 				// Unrequested result?
 			} else {
@@ -244,12 +250,11 @@ func (c *Client) receive() (ClientMessage, error) {
 }
 
 func (c *Client) resultChan(format string, args ...interface{}) chan ClientMessage {
-	if c.results == nil {
-		c.results = make(map[string]messageChan)
-	}
 	name := fmt.Sprintf(format, args...)
 	channel := make(chan ClientMessage, 1)
+	c.results_lock.Lock()
 	c.results[name] = channel
+	c.results_lock.Unlock()
 	return channel
 }
 
