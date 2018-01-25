@@ -366,6 +366,18 @@ func (t *longpollClientTransport) onConnect() {
 }
 
 func (t *longpollClientTransport) poll() {
+	for t.running.Load() {
+		t.pollOnce()
+	}
+
+	t.httpReq_lock.Lock()
+	defer t.httpReq_lock.Unlock()
+	t.httpReq = nil
+	close(t.messages)
+}
+
+func (t *longpollClientTransport) pollOnce(buf []byte) {
+	url := t.client.url(ClientModeLongPoll)
 	data := ClientMessage{
 		"__type":  PollMessage,
 		"__token": t.token,
@@ -377,19 +389,6 @@ func (t *longpollClientTransport) poll() {
 	if err != nil {
 		return
 	}
-
-	for t.running.Load() {
-		t.pollOnce(buf)
-	}
-
-	t.httpReq_lock.Lock()
-	defer t.httpReq_lock.Unlock()
-	t.httpReq = nil
-	close(t.messages)
-}
-
-func (t *longpollClientTransport) pollOnce(buf []byte) {
-	url := t.client.url(ClientModeLongPoll)
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(buf))
 	if err != nil {
 		t.client.disconnected()
