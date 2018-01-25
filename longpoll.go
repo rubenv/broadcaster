@@ -303,6 +303,10 @@ func (t *longpollClientTransport) Send(data ClientMessage) error {
 
 	url := t.client.url(ClientModeLongPoll)
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(buf))
+	if err != nil {
+		return err
+	}
+
 	req.Header.Set("Content-Type", "application/json")
 	if t.client.UserAgent != "" {
 		req.Header.Set("User-Agent", t.client.UserAgent)
