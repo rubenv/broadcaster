@@ -63,6 +63,7 @@ type Client struct {
 	results_lock      sync.Mutex
 	should_disconnect atomic.Bool
 	attempts          int
+	listenWait        sync.WaitGroup
 
 	channels      map[string]bool
 	channels_lock sync.Mutex
@@ -183,6 +184,8 @@ func (c *Client) Disconnect() error {
 	for _, r := range c.results {
 		close(r)
 	}
+
+	c.listenWait.Wait()
 	close(c.Messages)
 	c.disconnect_done = true
 
@@ -213,6 +216,9 @@ func (c *Client) disconnected() {
 }
 
 func (c *Client) listen() {
+	c.listenWait.Add(1)
+	defer c.listenWait.Done()
+
 	c.transport.onConnect()
 
 	for {
