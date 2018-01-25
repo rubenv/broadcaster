@@ -37,7 +37,7 @@ func newWebsocketConnection(w http.ResponseWriter, r *http.Request, s *Server) {
 func (c *websocketConnection) handshake(w http.ResponseWriter, r *http.Request) error {
 	conn, err := c.Server.Upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		http.Error(w, err.Error(), 400)
+		// websocket library already sends error message, nothing to do here
 		return nil
 	}
 	c.Conn = conn
