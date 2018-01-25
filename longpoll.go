@@ -376,7 +376,7 @@ func (t *longpollClientTransport) poll() {
 	close(t.messages)
 }
 
-func (t *longpollClientTransport) pollOnce(buf []byte) {
+func (t *longpollClientTransport) pollOnce() {
 	url := t.client.url(ClientModeLongPoll)
 	data := ClientMessage{
 		"__type":  PollMessage,
