@@ -63,7 +63,6 @@ type Client struct {
 	results_lock      sync.Mutex
 	should_disconnect atomic.Bool
 	attempts          int
-	listenWait        sync.WaitGroup
 
 	channels      map[string]bool
 	channels_lock sync.Mutex
@@ -180,12 +179,11 @@ func (c *Client) Disconnect() error {
 		c.Error = err
 	}
 	c.results_lock.Lock()
-	defer c.results_lock.Unlock()
 	for _, r := range c.results {
 		close(r)
 	}
+	c.results_lock.Unlock()
 
-	c.listenWait.Wait()
 	close(c.Messages)
 	c.disconnect_done = true
 
@@ -216,9 +214,6 @@ func (c *Client) disconnected() {
 }
 
 func (c *Client) listen() {
-	c.listenWait.Add(1)
-	defer c.listenWait.Done()
-
 	c.transport.onConnect()
 
 	for {
@@ -229,7 +224,7 @@ func (c *Client) listen() {
 		}
 
 		if m.Type() == MessageMessage {
-			c.Messages <- m
+			c.relay(m)
 		} else {
 			c.results_lock.Lock()
 			channel, ok := c.results[m.ResultId()]
@@ -240,6 +235,16 @@ func (c *Client) listen() {
 				channel <- m
 			}
 		}
+	}
+}
+
+// Prevents sending messages after we've disconnected
+func (c *Client) relay(m ClientMessage) {
+	c.disconnect_lock.Lock()
+	defer c.disconnect_lock.Unlock()
+
+	if !c.disconnect_done {
+		c.Messages <- m
 	}
 }
 
