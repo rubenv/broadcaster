@@ -250,13 +250,14 @@ func (c *longpollConnection) GetToken() string {
 
 // Client transport
 type longpollClientTransport struct {
-	running    atomic.Bool
-	client     *Client
-	messages   chan ClientMessage
-	token      string
-	httpClient http.Client
-	httpReq    *http.Request
-	call       int
+	running      atomic.Bool
+	client       *Client
+	messages     chan ClientMessage
+	token        string
+	httpClient   http.Client
+	httpReq      *http.Request
+	httpReq_lock sync.Mutex
+	call         int
 
 	err      error
 	err_lock sync.Mutex
@@ -288,10 +289,14 @@ func (t *longpollClientTransport) Connect(authData ClientMessage) error {
 
 func (t *longpollClientTransport) Close() error {
 	t.running.Store(false)
+
+	t.httpReq_lock.Lock()
+	defer t.httpReq_lock.Unlock()
 	if t.httpReq != nil {
 		if transport, ok := t.httpClient.Transport.(*http.Transport); ok {
 			transport.CancelRequest(t.httpReq)
 		}
+		t.httpReq = nil
 	}
 	t.err_lock.Lock()
 	t.err = io.EOF
@@ -376,6 +381,8 @@ func (t *longpollClientTransport) poll() {
 		t.pollOnce(buf)
 	}
 
+	t.httpReq_lock.Lock()
+	defer t.httpReq_lock.Unlock()
 	t.httpReq = nil
 	close(t.messages)
 }
@@ -388,13 +395,15 @@ func (t *longpollClientTransport) pollOnce(buf []byte) {
 		return
 	}
 
+	t.httpReq_lock.Lock()
 	t.httpReq = req
-	t.httpReq.Header.Set("Content-Type", "application/json")
+	t.httpReq_lock.Unlock()
+	req.Header.Set("Content-Type", "application/json")
 	if t.client.UserAgent != "" {
-		t.httpReq.Header.Set("User-Agent", t.client.UserAgent)
+		req.Header.Set("User-Agent", t.client.UserAgent)
 	}
 
-	resp, err := t.httpClient.Do(t.httpReq)
+	resp, err := t.httpClient.Do(req)
 	if err != nil {
 		t.client.disconnected()
 		return
