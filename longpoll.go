@@ -329,17 +329,16 @@ func (t *longpollClientTransport) onConnect() {
 }
 
 func (t *longpollClientTransport) poll() {
-	data := clientMessage{
-		"__type":  PollMessage,
-		"__token": t.token,
-		"seq":     strconv.Itoa(t.call),
-	}
-	t.call++
-
-	buf, _ := json.Marshal(data)
-
 	for t.running {
 		url := t.client.url(ClientModeLongPoll)
+		data := clientMessage{
+			"__type":  PollMessage,
+			"__token": t.token,
+			"seq":     strconv.Itoa(t.call),
+		}
+		t.call++
+
+		buf, _ := json.Marshal(data)
 		req, err := http.NewRequest("POST", url, bytes.NewBuffer(buf))
 		if err != nil {
 			t.client.disconnected()
