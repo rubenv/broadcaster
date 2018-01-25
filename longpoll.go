@@ -8,9 +8,11 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/pborman/uuid"
+	"github.com/uber-go/atomic"
 )
 
 type longpollConnection struct {
@@ -248,14 +250,16 @@ func (c *longpollConnection) GetToken() string {
 
 // Client transport
 type longpollClientTransport struct {
-	running    bool
+	running    atomic.Bool
 	client     *Client
 	messages   chan ClientMessage
-	err        error
 	token      string
 	httpClient http.Client
 	httpReq    *http.Request
 	call       int
+
+	err      error
+	err_lock sync.Mutex
 }
 
 func newlongpollClientTransport(c *Client) *longpollClientTransport {
@@ -283,13 +287,15 @@ func (t *longpollClientTransport) Connect(authData ClientMessage) error {
 }
 
 func (t *longpollClientTransport) Close() error {
-	t.running = false
+	t.running.Store(false)
 	if t.httpReq != nil {
 		if transport, ok := t.httpClient.Transport.(*http.Transport); ok {
 			transport.CancelRequest(t.httpReq)
 		}
 	}
+	t.err_lock.Lock()
 	t.err = io.EOF
+	t.err_lock.Unlock()
 	return nil
 }
 
@@ -340,7 +346,7 @@ func (t *longpollClientTransport) Send(data ClientMessage) error {
 func (t *longpollClientTransport) Receive() (ClientMessage, error) {
 	m, ok := <-t.messages
 	if !ok {
-		return nil, t.err
+		return nil, t.getErr()
 	}
 	if m.Type() == AuthOKMessage {
 		t.token = m.Token()
@@ -349,7 +355,7 @@ func (t *longpollClientTransport) Receive() (ClientMessage, error) {
 }
 
 func (t *longpollClientTransport) onConnect() {
-	t.running = true
+	t.running.Store(true)
 	go t.poll()
 }
 
@@ -366,7 +372,7 @@ func (t *longpollClientTransport) poll() {
 		return
 	}
 
-	for t.running {
+	for t.running.Load() {
 		t.pollOnce(buf)
 	}
 
@@ -400,7 +406,7 @@ func (t *longpollClientTransport) pollOnce(buf []byte) {
 		return
 	}
 
-	if !t.running {
+	if !t.running.Load() {
 		return
 	}
 
@@ -412,4 +418,10 @@ func (t *longpollClientTransport) pollOnce(buf []byte) {
 	for _, v := range result {
 		t.messages <- v
 	}
+}
+
+func (t *longpollClientTransport) getErr() error {
+	t.err_lock.Lock()
+	defer t.err_lock.Unlock()
+	return t.err
 }
