@@ -98,6 +98,11 @@ func testClient(t *testing.T, clientFn func(s *testServer, conf ...func(c *Clien
 	if stats.LocalSubscriptions["test"] != 1 {
 		t.Errorf("Unexpected subscription count: %d", stats.LocalSubscriptions["test"])
 	}
+	call := 0
+	if client.Mode == ClientModeLongPoll {
+		lp, _ := client.transport.(*longpollClientTransport)
+		call = lp.call
+	}
 
 	// Shouldn't get message on other channel
 	err = server.sendMessage("other", "Other message")
@@ -131,6 +136,13 @@ func testClient(t *testing.T, clientFn func(s *testServer, conf ...func(c *Clien
 	err = server.sendMessage("test", "Test message 3")
 	if err != nil {
 		t.Fatal(err)
+	}
+
+	if client.Mode == ClientModeLongPoll {
+		lp, _ := client.transport.(*longpollClientTransport)
+		if call == lp.call {
+			t.Errorf("Call %d should be different from previous %d in longpoll", call, lp.call)
+		}
 	}
 
 	m = <-client.Messages
