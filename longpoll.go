@@ -250,8 +250,8 @@ func (c *longpollConnection) GetToken() string {
 
 // Client transport
 type longpollClientTransport struct {
+	poll_lock    sync.Mutex
 	running      *atomic.Bool
-	polling      *atomic.Bool
 	client       *Client
 	messages     chan ClientMessage
 	token        string
@@ -267,7 +267,6 @@ type longpollClientTransport struct {
 func newlongpollClientTransport(c *Client) clientTransport {
 	return &longpollClientTransport{
 		running:  atomic.NewBool(false),
-		polling:  atomic.NewBool(false),
 		client:   c,
 		messages: make(chan ClientMessage, 10),
 		httpClient: http.Client{
@@ -368,11 +367,8 @@ func (t *longpollClientTransport) onConnect() {
 }
 
 func (t *longpollClientTransport) poll() {
-	swapped := t.polling.CAS(false, true)
-	if !swapped {
-		return
-	}
-	defer t.polling.Store(false)
+	t.poll_lock.Lock()
+	defer t.poll_lock.Unlock()
 
 	for t.running.Load() {
 		t.pollOnce()
