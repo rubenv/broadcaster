@@ -371,7 +371,10 @@ func (t *longpollClientTransport) poll() {
 	defer t.poll_lock.Unlock()
 
 	for t.running.Load() {
-		t.pollOnce()
+		err := t.pollOnce()
+		if err != nil {
+			return
+		}
 	}
 
 	t.httpReq_lock.Lock()
@@ -380,7 +383,7 @@ func (t *longpollClientTransport) poll() {
 	close(t.messages)
 }
 
-func (t *longpollClientTransport) pollOnce() {
+func (t *longpollClientTransport) pollOnce() error {
 	url := t.client.url(ClientModeLongPoll)
 	data := ClientMessage{
 		"__type":  PollMessage,
@@ -391,12 +394,12 @@ func (t *longpollClientTransport) pollOnce() {
 
 	buf, err := json.Marshal(data)
 	if err != nil {
-		return
+		return err
 	}
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(buf))
 	if err != nil {
 		t.client.disconnected()
-		return
+		return err
 	}
 
 	t.httpReq_lock.Lock()
@@ -410,27 +413,29 @@ func (t *longpollClientTransport) pollOnce() {
 	resp, err := t.httpClient.Do(req)
 	if err != nil {
 		t.client.disconnected()
-		return
+		return err
 	}
 
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusUnauthorized {
 		t.client.disconnected()
-		return
+		return err
 	}
 
 	if !t.running.Load() {
-		return
+		return nil
 	}
 
 	result := []ClientMessage{}
 	err = json.NewDecoder(resp.Body).Decode(&result)
 	if err != nil {
-		return
+		return err
 	}
 	for _, v := range result {
 		t.messages <- v
 	}
+
+	return nil
 }
 
 func (t *longpollClientTransport) getErr() error {
