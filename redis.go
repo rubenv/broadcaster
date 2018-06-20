@@ -1,20 +1,19 @@
 package broadcaster
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"log"
 	"sync"
 	"time"
 
-	"github.com/eapache/go-resiliency/retrier"
 	"github.com/gomodule/redigo/redis"
+	"github.com/rubenv/rrpubsub"
 )
 
 type redisBackend struct {
 	conn           redis.Pool
-	pubSub         redis.PubSubConn
+	pubSub         *rrpubsub.Conn
 	pubSubHost     string
 	prefix         string
 	timeout        int
@@ -23,7 +22,6 @@ type redisBackend struct {
 	listeningLock  sync.Mutex
 	controlWait    sync.WaitGroup
 
-	dialRetrier *retrier.Retrier
 	dialOptions []redis.DialOption
 
 	subscriptions     map[string]bool
@@ -74,7 +72,6 @@ func newRedisBackend(redisHost, pubSubHost, controlChannel, prefix string, timeo
 			},
 		},
 		dialOptions:    opts,
-		dialRetrier:    r,
 		prefix:         prefix,
 		pubSubHost:     pubSubHost,
 		timeout:        int(timeout.Seconds()) + 1,
@@ -90,76 +87,35 @@ func newRedisBackend(redisHost, pubSubHost, controlChannel, prefix string, timeo
 }
 
 func (b *redisBackend) listen() {
-	for {
-		err := b.receive()
-		if err != nil && err != io.EOF {
-			log.Printf("Redis error: %s", err)
-		}
-		b.controlWait.Add(1)
+	b.connect()
 
-		// Sleep until next iteration
-		time.Sleep(redisSleep)
+	for {
+		msg, ok := <-b.pubSub.Messages
+		if !ok {
+			return
+		}
+		b.Messages <- msg
 	}
 }
 
-func (b *redisBackend) connect() error {
+func (b *redisBackend) connect() {
 	b.listeningLock.Lock()
 	b.listening = false
 	b.listeningLock.Unlock()
 
-	var p redis.Conn
-	err := b.dialRetrier.Run(func() error {
-		c, err := redis.Dial("tcp", b.pubSubHost, b.dialOptions...)
-		if err != nil {
-			return err
-		}
-		p = c
-		return nil
-	})
-	if err != nil {
-		return err
-	}
-
-	b.pubSub = redis.PubSubConn{Conn: p}
-
-	err = b.pubSub.Subscribe(b.controlChannel)
-	if err != nil {
-		b.pubSub.Close()
-		return err
-	}
+	b.pubSub = rrpubsub.New(context.Background(), "tcp", b.pubSubHost, b.dialOptions...)
+	b.pubSub.Subscribe(b.controlChannel)
 
 	b.subscriptionsLock.Lock()
 	defer b.subscriptionsLock.Unlock()
 	for k, _ := range b.subscriptions {
-		err = b.pubSub.Subscribe(k)
-		if err != nil {
-			b.pubSub.Close()
-			return err
-		}
+		b.pubSub.Subscribe(k)
 	}
 
 	b.listeningLock.Lock()
 	b.listening = true
 	b.listeningLock.Unlock()
 	b.controlWait.Done()
-	return nil
-}
-
-func (b *redisBackend) receive() error {
-	err := b.connect()
-	if err != nil {
-		return err
-	}
-
-	for {
-		switch v := b.pubSub.Receive().(type) {
-		case redis.Message:
-			b.Messages <- v
-		case error:
-			// Server stopped?
-			return v.(error)
-		}
-	}
 }
 
 func (b *redisBackend) key(name string, args ...interface{}) string {
@@ -252,7 +208,8 @@ func (b *redisBackend) Subscribe(channel string) error {
 	b.subscriptionsLock.Lock()
 	defer b.subscriptionsLock.Unlock()
 	b.subscriptions[channel] = true
-	return b.pubSub.Subscribe(channel)
+	b.pubSub.Subscribe(channel)
+	return nil
 }
 
 func (b *redisBackend) Unsubscribe(channel string) error {
@@ -260,7 +217,8 @@ func (b *redisBackend) Unsubscribe(channel string) error {
 	b.subscriptionsLock.Lock()
 	defer b.subscriptionsLock.Unlock()
 	delete(b.subscriptions, channel)
-	return b.pubSub.Unsubscribe(channel)
+	b.pubSub.Unsubscribe(channel)
+	return nil
 }
 
 // Records channel subscription and broadcasts it to listeners

@@ -189,6 +189,8 @@ func TestHubMessage(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	time.Sleep(1 * time.Second)
+
 	hubTestRedis.sendMessage(testChannel, "1")
 	select {
 	case <-conn.Messages:
