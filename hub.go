@@ -149,12 +149,7 @@ func (h *hub) handleSubscribe(r subscriptionRequest) {
 
 	if _, ok := h.channels[r.Channel]; !ok {
 		// New channel! Try to connect to Redis first
-		err := h.redis.Subscribe(r.Channel)
-		if err != nil {
-			r.Done <- err
-			return
-		}
-
+		h.redis.Subscribe(r.Channel)
 		h.channels[r.Channel] = make(map[connection]bool)
 	}
 
@@ -192,12 +187,7 @@ func (h *hub) handleUnsubscribe(r subscriptionRequest) {
 
 	if len(h.channels[r.Channel]) == 0 {
 		// Last subscriber, release it.
-		err := h.redis.Unsubscribe(r.Channel)
-		if err != nil {
-			r.Done <- err
-			return
-		}
-
+		h.redis.Unsubscribe(r.Channel)
 		delete(h.channels, r.Channel)
 	}
 

@@ -107,10 +107,10 @@ func (b *redisBackend) connect() {
 	b.pubSub.Subscribe(b.controlChannel)
 
 	b.subscriptionsLock.Lock()
-	defer b.subscriptionsLock.Unlock()
 	for k, _ := range b.subscriptions {
 		b.pubSub.Subscribe(k)
 	}
+	b.subscriptionsLock.Unlock()
 
 	b.listeningLock.Lock()
 	b.listening = true
@@ -203,22 +203,20 @@ func (b *redisBackend) IsConnected(token string) (bool, error) {
 	return r.(int64) == 1, nil
 }
 
-func (b *redisBackend) Subscribe(channel string) error {
+func (b *redisBackend) Subscribe(channel string) {
 	b.controlWait.Wait()
 	b.subscriptionsLock.Lock()
 	defer b.subscriptionsLock.Unlock()
 	b.subscriptions[channel] = true
 	b.pubSub.Subscribe(channel)
-	return nil
 }
 
-func (b *redisBackend) Unsubscribe(channel string) error {
+func (b *redisBackend) Unsubscribe(channel string) {
 	b.controlWait.Wait()
 	b.subscriptionsLock.Lock()
 	defer b.subscriptionsLock.Unlock()
 	delete(b.subscriptions, channel)
 	b.pubSub.Unsubscribe(channel)
-	return nil
 }
 
 // Records channel subscription and broadcasts it to listeners
