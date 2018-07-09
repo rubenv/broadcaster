@@ -9,6 +9,7 @@ import (
 
 	"github.com/gomodule/redigo/redis"
 	"github.com/rubenv/rrpubsub"
+	"github.com/uber-go/atomic"
 )
 
 type redisBackend struct {
@@ -18,8 +19,7 @@ type redisBackend struct {
 	prefix         string
 	timeout        int
 	controlChannel string
-	listening      bool
-	listeningLock  sync.Mutex
+	listening      *atomic.Bool
 	controlWait    sync.WaitGroup
 
 	dialOptions []redis.DialOption
@@ -78,6 +78,7 @@ func newRedisBackend(redisHost, pubSubHost, controlChannel, prefix string, timeo
 		controlChannel: controlChannel,
 		subscriptions:  make(map[string]bool),
 		Messages:       make(chan redis.Message, 250),
+		listening:      atomic.NewBool(false),
 	}
 	b.controlWait.Add(1)
 
@@ -99,9 +100,7 @@ func (b *redisBackend) listen() {
 }
 
 func (b *redisBackend) connect() {
-	b.listeningLock.Lock()
-	b.listening = false
-	b.listeningLock.Unlock()
+	b.listening.Store(false)
 
 	b.pubSub = rrpubsub.New(context.Background(), "tcp", b.pubSubHost, b.dialOptions...)
 	b.pubSub.Subscribe(b.controlChannel)
@@ -112,9 +111,7 @@ func (b *redisBackend) connect() {
 	}
 	b.subscriptionsLock.Unlock()
 
-	b.listeningLock.Lock()
-	b.listening = true
-	b.listeningLock.Unlock()
+	b.listening.Store(true)
 	b.controlWait.Done()
 }
 
@@ -319,7 +316,5 @@ func (b *redisBackend) LongpollGetBacklog(token string, result chan ClientMessag
 }
 
 func (b *redisBackend) IsListening() bool {
-	b.listeningLock.Lock()
-	defer b.listeningLock.Unlock()
-	return b.listening
+	return b.listening.Load()
 }
