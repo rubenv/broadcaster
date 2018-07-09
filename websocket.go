@@ -136,6 +136,7 @@ func (c *websocketConnection) Run() {
 			err := hub.Unsubscribe(c, channel)
 			if err != nil {
 				c.writeConn(newChannelErrorMessage(UnsubscribeErrorMessage, channel, err))
+				continue
 			}
 			c.writeConn(newChannelMessage(UnsubscribeOKMessage, channel))
 
