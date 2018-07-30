@@ -140,9 +140,9 @@ func (c *longpollConnection) poll(w http.ResponseWriter, seq string) error {
 
 	c.deadline = time.After(c.Server.Timeout - c.Server.PollTime)
 	c.messages = make(chan ClientMessage, 10)
-	c.subscribe = make(chan string, 1)
-	c.unsubscribe = make(chan string, 1)
-	c.transfer = make(chan string, 1)
+	c.subscribe = make(chan string, 10)
+	c.unsubscribe = make(chan string, 10)
+	c.transfer = make(chan string, 10)
 
 	hub := c.Server.hub
 
@@ -236,7 +236,10 @@ func (c *longpollConnection) Send(channel, message string) {
 func (c *longpollConnection) Process(t string, args []string) {
 	switch t {
 	case "transfer":
-		c.transfer <- args[0]
+		select {
+		case c.transfer <- args[0]:
+		default: // Receiver might be dead and buffer is full, discard
+		}
 	case "subscribe":
 		c.subscribe <- args[0]
 	case "unsubscribe":
