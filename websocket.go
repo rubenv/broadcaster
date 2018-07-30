@@ -61,20 +61,20 @@ func (c *websocketConnection) handshake(w http.ResponseWriter, r *http.Request) 
 
 	err = c.readConn(&c.AuthData)
 	if err != nil {
-		c.Close(400, err.Error())
+		c.Close(4400, err.Error())
 		return nil
 	}
 
 	// Expect auth packet first.
 	if c.AuthData.Type() != AuthMessage {
 		c.writeConn(newErrorMessage(AuthFailedMessage, errors.New("Auth expected")))
-		c.Close(401, "Auth expected")
+		c.Close(4401, "Auth expected")
 		return nil
 	}
 
 	if c.Server.CanConnect != nil && !c.Server.CanConnect(c.AuthData) {
 		c.writeConn(newErrorMessage(AuthFailedMessage, errors.New("Unauthorized")))
-		c.Close(401, "Unauthorized")
+		c.Close(4401, "Unauthorized")
 		return nil
 	}
 
@@ -111,7 +111,7 @@ func (c *websocketConnection) Run() {
 	for {
 		err := c.readConn(&m)
 		if err != nil {
-			c.Close(400, err.Error())
+			c.Close(4400, err.Error())
 			break
 		}
 
