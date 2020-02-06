@@ -9,7 +9,7 @@ import (
 
 	"github.com/gomodule/redigo/redis"
 	"github.com/rubenv/rrpubsub"
-	"github.com/uber-go/atomic"
+	"go.uber.org/atomic"
 )
 
 type redisBackend struct {

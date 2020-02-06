@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/pborman/uuid"
-	"github.com/uber-go/atomic"
+	"go.uber.org/atomic"
 )
 
 type longpollConnection struct {

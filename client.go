@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/uber-go/atomic"
+	"go.uber.org/atomic"
 )
 
 // Client connection mode.

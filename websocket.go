@@ -9,7 +9,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/pborman/uuid"
-	"github.com/uber-go/atomic"
+	"go.uber.org/atomic"
 )
 
 type websocketConnection struct {
