@@ -84,7 +84,7 @@ type Client struct {
 	Error error
 
 	// Incoming messages
-	Messages chan clientMessage
+	Messages chan ClientMessage
 
 	// Receives true when disconnected
 	Disconnected chan bool
@@ -92,8 +92,14 @@ type Client struct {
 	// Timeout
 	Timeout time.Duration
 
+	// Ping interval
+	PingInterval time.Duration
+
 	// Reconnection attempts
 	MaxAttempts int
+
+	// Can be overwritten
+	UserAgent string
 }
 ```
 
@@ -126,6 +132,37 @@ func (c *Client) Subscribe(channel string) error
 
 ```go
 func (c *Client) Unsubscribe(channel string) error
+```
+
+#### type ClientMessage
+
+```go
+type ClientMessage map[string]interface{}
+```
+
+
+#### func (ClientMessage) Channel
+
+```go
+func (c ClientMessage) Channel() string
+```
+
+#### func (ClientMessage) ResultId
+
+```go
+func (c ClientMessage) ResultId() string
+```
+
+#### func (ClientMessage) Token
+
+```go
+func (c ClientMessage) Token() string
+```
+
+#### func (ClientMessage) Type
+
+```go
+func (c ClientMessage) Type() string
 ```
 
 #### type ClientMode
@@ -223,7 +260,7 @@ type Stats struct {
 
     (The MIT License)
 
-    Copyright (C) 2013-2016 by Ruben Vermeersch <ruben@rocketeer.be>
+    Copyright (C) 2013-2020 by Ruben Vermeersch <ruben@rocketeer.be>
 
     Permission is hereby granted, free of charge, to any person obtaining a copy
     of this software and associated documentation files (the "Software"), to deal

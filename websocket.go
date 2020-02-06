@@ -7,10 +7,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gorilla/websocket"
 	"github.com/pborman/uuid"
 	"github.com/uber-go/atomic"
-
-	"github.com/gorilla/websocket"
 )
 
 type websocketConnection struct {
