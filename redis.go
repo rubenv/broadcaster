@@ -14,7 +14,7 @@ import (
 
 type redisBackend struct {
 	conn           redis.Pool
-	pubSub         *rrpubsub.Conn
+	pubSub         rrpubsub.Conn
 	pubSubHost     string
 	prefix         string
 	timeout        int
@@ -91,7 +91,7 @@ func (b *redisBackend) listen() {
 	b.connect()
 
 	for {
-		msg, ok := <-b.pubSub.Messages
+		msg, ok := <-b.pubSub.Messages()
 		if !ok {
 			return
 		}
