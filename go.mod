@@ -1,4 +1,4 @@
-module github.com/rubenv/broadcaster
+module github.com/Elandiro/broadcaster
 
 go 1.13
 
