@@ -358,6 +358,12 @@ func (t *longpollClientTransport) Receive() (ClientMessage, error) {
 	if !ok {
 		return nil, t.getErr()
 	}
+	if m.Type() == AuthFailedMessage {
+		return nil, &CloseError{
+			Code: 4401,
+			Text: m.Reason(),
+		}
+	}
 	if m.Type() == AuthOKMessage {
 		t.token = m.Token()
 	}

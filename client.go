@@ -10,6 +10,15 @@ import (
 	"go.uber.org/atomic"
 )
 
+type CloseError struct {
+	Code int
+	Text string
+}
+
+func (e *CloseError) Error() string {
+	return fmt.Sprintf("Closed: %d %s", e.Code, e.Text)
+}
+
 // Client connection mode.
 type ClientMode int
 
@@ -140,7 +149,10 @@ func (c *Client) Connect() error {
 		}
 
 		if m.Type() == AuthFailedMessage {
-			return fmt.Errorf("Auth error: %s", m["reason"])
+			return &CloseError{
+				Code: 4401,
+				Text: m.Reason(),
+			}
 		} else if m.Type() != AuthOKMessage {
 			return fmt.Errorf("Expected %s or %s, got %s instead", AuthOKMessage, AuthFailedMessage, m.Type())
 		}

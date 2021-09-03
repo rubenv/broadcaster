@@ -84,6 +84,14 @@ func (c ClientMessage) Channel() string {
 	return s
 }
 
+func (c ClientMessage) Reason() string {
+	s, ok := c["reason"].(string)
+	if !ok {
+		return ""
+	}
+	return s
+}
+
 func newMessage(t string) ClientMessage {
 	return ClientMessage{
 		"__type": t,

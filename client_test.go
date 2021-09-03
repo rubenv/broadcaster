@@ -1,6 +1,7 @@
 package broadcaster
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -26,7 +27,8 @@ func testCanConnect(t *testing.T, clientFn func(s *testServer, conf ...func(c *C
 	defer server.Stop()
 
 	client, err := clientFn(server)
-	if err == nil || err.Error() != "Auth error: Unauthorized" {
+	var cErr *CloseError
+	if err == nil || !errors.As(err, &cErr) || cErr.Code != 4401 || cErr.Text != "Unauthorized" {
 		t.Fatal("Did not properly deny access")
 	}
 	if client != nil {
@@ -199,11 +201,9 @@ func testRefusesUnauthedCommands(t *testing.T, clientFn func(s *testServer, conf
 		t.Fatal(err)
 	}
 
-	m, err := client.receive()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if m.Type() != AuthFailedMessage && m["reason"] != "Auth expected" {
+	_, err = client.receive()
+	var cErr *CloseError
+	if err == nil || !errors.As(err, &cErr) || cErr.Code != 4401 || cErr.Text != "Auth expected" {
 		t.Fatal("Did not properly deny access")
 	}
 

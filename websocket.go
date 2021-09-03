@@ -275,6 +275,13 @@ func (t *websocketClientTransport) Send(data ClientMessage) error {
 func (t *websocketClientTransport) Receive() (ClientMessage, error) {
 	m := ClientMessage{}
 	err := t.readConn(&m)
+	var cerr *websocket.CloseError
+	if errors.As(err, &cerr) {
+		return nil, &CloseError{
+			Code: cerr.Code,
+			Text: cerr.Text,
+		}
+	}
 	return m, err
 }
 
